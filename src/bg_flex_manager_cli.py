@@ -552,17 +552,14 @@ def step3_user_selection(coin, selected_product, account_status):
     min_purchase_amount = 0.0  # 默認值
     subscribe_precision = 10  # 默認精度
     
-    print(f"[調試] 開始檢查 {len(account_status)} 個帳戶的 subscribe_info...")
     for account_id, status in account_status.items():
         subscribe_info = status.get('subscribe_info', {})
-        print(f"[調試] 帳戶 {account_id} subscribe_info code: {subscribe_info.get('code', 'None')}")
         
         if subscribe_info.get('code') == '00000' and subscribe_info.get('data'):
             data = subscribe_info.get('data', {})
             single_min_amount = data.get('singleMinAmount')
             precision = data.get('subscribePrecision')
             
-            print(f"[調試] 獲取到 singleMinAmount: {single_min_amount}, subscribePrecision: {precision}")
             
             if single_min_amount:
                 min_purchase_amount = safe_float(single_min_amount)
