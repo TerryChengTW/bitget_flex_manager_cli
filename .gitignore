@@ -1,0 +1,252 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# Configuration files with sensitive data
+bg_key.json
+bg_key_*.json
+config.json
+*_config.json
+
+# Logs
+logs/
+*.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Windows
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+*.lnk
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Application specific
+version_config.json
+BitgetFlexManagerCLI/
+
+# AI/LLM related (2025)
+# Claude Code (Anthropic)
+.claude/
+.claudeignore
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Cursor IDE
+.cursor/
+.cursor-server/
+.cursorignore
+
+# Windsurf IDE
+.windsurf/
+.codeiumignore
+
+# Cline (VSCode Extension)
+.cline/
+
+# GitHub Copilot
+.copilot/
+.github/copilot-instructions.md
+
+# Aider AI
+.aider*
+.aider.chat.history.md
+.aiderignore
+
+# Continue (VSCode Extension)
+.continue/
+
+# Bolt (StackBlitz)
+.bolt/
+
+# PearAI
+.pearai/
+
+# Replit AI
+.replit/
+.upm/
+
+# DeepSeek AI
+.deepseek/
+
+# OpenAI Codex/GPT
+.openai/
+
+# CrewAI
+.crewai/
+
+# LangChain
+.langchain/
+
+# API Keys and credentials
+anthropic_api_key.txt
+openai_api_key.txt
+claude_api_key.txt
+gemini_api_key.txt
+deepseek_api_key.txt
+*_api_key.txt
+*.env.local
+.env.ai
+
+# AI conversation logs and prompts  
+ai_conversations/
+llm_logs/
+*_prompt.txt
+*_context.txt
+.ai_history/
+claude_history/
+ai_memory/
+
+# AI agent configurations
+agents/
+subagents/
+.agents/
+
+# AI cache directories
+**/Cache/
+**/CachedData/
+**/CachedExtensionVSIXs/
+~/.claude/
+%APPDATA%/Claude/
+/Library/Application Support/ClaudeCode/
+
+# Claude Code specific (keep this for shared instructions)
+CLAUDE.md
