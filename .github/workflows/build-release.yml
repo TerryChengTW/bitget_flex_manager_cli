@@ -12,7 +12,7 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            artifact_name: bitget-flex-manager-cli-windows.exe
+            artifact_name: bitget-flex-manager-cli-windows.zip
           - os: macos-latest
             artifact_name: bitget-flex-manager-cli-macos.app
 
@@ -36,11 +36,32 @@ jobs:
       run: |
         cd src
         if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-          # Windows: 標準.exe檔案
-          pyinstaller --onefile --console --add-data "bg_key_example.json;." bg_flex_manager_cli.py --name bitget-flex-manager-cli
+          # Windows: 建立.exe檔案然後打包成.zip
+          pyinstaller --onefile --console bg_flex_manager_cli.py --name bitget-flex-manager-cli
+          
+          # 建立Windows發布目錄
+          mkdir -p windows-release
+          cp dist/bitget-flex-manager-cli.exe windows-release/
+          cp bg_key_example.json windows-release/
+          
+          # 建立使用說明
+          echo "# Bitget Flex Manager CLI - Windows" > windows-release/README.txt
+          echo "" >> windows-release/README.txt
+          echo "1. 雙擊 bitget-flex-manager-cli.exe 執行程式" >> windows-release/README.txt
+          echo "2. 第一次執行時程式會要求選擇配置檔案" >> windows-release/README.txt
+          echo "3. 可以使用 bg_key_example.json 作為範本建立你的配置檔案" >> windows-release/README.txt
+          echo "4. 在配置檔案中填入你的 Bitget API 資訊" >> windows-release/README.txt
+          
+          # 建立.zip檔案
+          cd windows-release
+          zip -r ../bitget-flex-manager-cli-windows.zip .
+          cd ..
+          
+          # 移動.zip到dist目錄
+          mv bitget-flex-manager-cli-windows.zip dist/
         else
           # macOS: 先建立可執行檔
-          pyinstaller --onefile --console --add-data "bg_key_example.json:." bg_flex_manager_cli.py --name bitget-flex-manager-cli
+          pyinstaller --onefile --console bg_flex_manager_cli.py --name bitget-flex-manager-cli
           
           # 創建.app bundle結構
           mkdir -p "bitget-flex-manager-cli.app/Contents/MacOS"
@@ -48,6 +69,9 @@ jobs:
           
           # 移動可執行檔到.app中
           mv dist/bitget-flex-manager-cli "bitget-flex-manager-cli.app/Contents/MacOS/bitget-flex-manager-cli-bin"
+          
+          # 複製配置範本到Resources目錄
+          cp bg_key_example.json "bitget-flex-manager-cli.app/Contents/Resources/"
           
           # 創建啟動shell script
           echo '#!/bin/bash' > "bitget-flex-manager-cli.app/Contents/MacOS/bitget-flex-manager-cli"
@@ -73,7 +97,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.artifact_name }}
-        path: ${{ matrix.os == 'windows-latest' && 'src/dist/bitget-flex-manager-cli.exe' || 'src/dist/bitget-flex-manager-cli.app' }}
+        path: ${{ matrix.os == 'windows-latest' && 'src/dist/bitget-flex-manager-cli-windows.zip' || 'src/dist/bitget-flex-manager-cli.app' }}
 
   release:
     needs: build
@@ -110,8 +134,11 @@ jobs:
           echo 'echo "✅ Installation complete! You can now double-click the .app to run."' >> install-macos.sh
           chmod +x install-macos.sh
           
+          echo "Adding config template to package..."
+          cp source/src/bg_key_example.json .
+          
           echo "Creating tar.gz archive (preserves permissions)..."
-          tar -czf bitget-flex-manager-cli-macos.tar.gz bitget-flex-manager-cli-macos.app install-macos.sh
+          tar -czf bitget-flex-manager-cli-macos.tar.gz bitget-flex-manager-cli-macos.app install-macos.sh bg_key_example.json
           ls -la *.tar.gz
         else
           echo "No .app bundle found"
@@ -122,17 +149,10 @@ jobs:
       with:
         path: source
       
-    - name: Prepare config template
-      run: |
-        # 從checkout的source目錄複製config template
-        cp source/src/bg_key_example.json . 
-        ls -la bg_key_example.json
-
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
         files: |
-          **/*.exe
+          **/*.zip
           *.tar.gz
-          bg_key_example.json
         generate_release_notes: true

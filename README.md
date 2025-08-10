@@ -29,9 +29,39 @@
 
 1. **前往 [Releases 頁面](https://github.com/TerryChengTW/bitget_flex_manager_cli/releases)**
 2. **下載最新版本的執行檔**
-   - Windows: `bitget-flex-manager-cli-windows.exe`
-   - macOS: `bitget-flex-manager-cli-macos.app`
-3. **雙擊執行檔啟動程式**
+   - Windows: `bitget-flex-manager-cli-windows.zip` - 解壓縮後雙擊執行
+   - macOS: `bitget-flex-manager-cli-macos.tar.gz` - 需要額外安裝步驟
+
+#### Windows 使用方式
+1. 下載 `bitget-flex-manager-cli-windows.zip`
+2. 解壓縮檔案到任意資料夾
+3. 解壓縮後會看到：
+   - `bitget-flex-manager-cli.exe` - 主程式
+   - `bg_key_example.json` - 配置檔案範本
+   - `README.txt` - 使用說明
+4. 雙擊 `bitget-flex-manager-cli.exe` 執行程式
+
+#### macOS 使用方式  
+> ⚠️ 由於 macOS 系統安全機制較為嚴格，需要透過安裝腳本開啟執行權限才能正常運行
+
+1. 下載 `bitget-flex-manager-cli-macos.tar.gz`
+2. 雙擊下載的檔案進行解壓縮
+3. 解壓縮後會看到一個資料夾，裡面包含：
+   - `bitget-flex-manager-cli-macos.app` - 主程式
+   - `bg_key_example.json` - 配置檔案範本
+   - `install-macos.sh` - 安裝腳本
+4. 開啟終端機 (Terminal)
+   - 快捷鍵：`Command + Space` 搜尋「Terminal」或「終端機」
+   - 或使用：`Command + Space` 搜尋「iTerm」(如果有安裝)
+   - 或到「應用程式」→「工具程式」→「終端機」
+5. 進入解壓縮的資料夾
+   - 方法一：使用 `cd` 指令，例如：`cd ~/Downloads/bitget-flex-manager-cli-macos`
+   - 方法二：直接拖拽資料夾到終端機視窗，會自動輸入路徑
+6. 執行安裝指令：
+   ```bash
+   ./install-macos.sh
+   ```
+7. 安裝完成後，就可以直接雙擊 `.app` 檔案執行程式
 
 ### 💻 方式二：從原始碼安裝
 > 適合熟悉程式或需要自訂的用戶
@@ -66,14 +96,16 @@ python src/bg_flex_manager_cli.py
 1. 進入「API 管理」頁面
 2. 點擊「創建 API Key」
 3. **重要：必須開啟以下權限**
-   - ✅ **現貨交易** (Spot Trading)
-   - ✅ **資金轉移** (Fund Transfer)
-   - ✅ **只讀** (Read Only)
+   - ✅ **現貨交易** (Spot Trading) - 查詢現貨帳戶餘額和理財寶操作需要
+   - ✅ **資金轉移** (Fund Transfer) - 主子帳戶間資金轉移需要
+   - ✅ **只讀** (Read Only) - 查詢帳戶資訊和產品資料需要
 4. 設定 IP 白名單(必須)
 5. 記下你的 API Key、Secret Key 和 Passphrase
 
 #### 步驟 3：配置工具
-1. **啟動程式後，選擇配置檔案**
+1. **準備配置檔案**：
+   - 複製 `bg_key_example.json` 檔案並重新命名（例如：`my_config.json`）
+   - 或直接編輯 `bg_key_example.json`
 2. **填入你的 API 資訊**：
    ```json
    {
@@ -87,6 +119,9 @@ python src/bg_flex_manager_cli.py
      }
    }
    ```
+3. **啟動程式**：
+   - 第一次執行時會彈出檔案選擇視窗
+   - 選擇你剛才準備好的配置檔案
 
 ---
 
@@ -102,18 +137,18 @@ python src/bg_flex_manager_cli.py
 ================================
 ```
 
-### 🔧 功能 1：初始化（建議首次使用）
-- **自動創建 4 個子帳戶**
+### 🔧 功能 1：初始化（首次打開需載入key）
+- **自動創建滿 20 個子帳戶**
 - **自動為每個子帳戶生成 API Key**
 - **自動配置所有必要設定**
 
-**使用時機**：第一次使用工具時
+**使用時機**：打開工具時
 
 ### 💰 功能 2：理財寶管理
 **完整流程**：選擇幣種 → 選擇產品 → 選擇策略 → 執行操作 → 查看結果
 
 **支援策略**：
-- 📈 **填滿策略** - 申購到第一階梯上限（通常 300 USDT）
+- 📈 **填滿策略** - 申購到第一階梯上限（例如 USDT = 300）
 - 📉 **保持策略** - 贖回多餘部分，保持第一階梯額度
 - 🔄 **清空策略** - 全部贖回理財寶
 
@@ -135,7 +170,7 @@ python src/bg_flex_manager_cli.py
 
 **操作**：
 1. 選擇「初始化」創建子帳戶
-2. 選擇「轉帳管理」分配資金（每個帳戶 300 USDT）
+2. 選擇「轉帳管理」分配資金到多個子帳戶
 3. 選擇「理財寶管理」批量申購到第一階梯上限
 
 **結果**：獲得更高的理財寶收益率！
@@ -160,8 +195,8 @@ python src/bg_flex_manager_cli.py
 - 🛡️ **最小權限原則** - 只要求必要的 API 權限
 
 ### ⚠️ 重要提醒
-1. **妥善保管 API Key** - 不要分享給任何人
-2. **建議設置 IP 白名單** - 提升安全性
+1. **🔐 妥善保管 API Key** - 絕對不要分享給任何人，這等同於你的帳戶密碼
+2. **🛡️ 強烈建議設置 IP 白名單** - 限制只有你的 IP 可以使用，大幅提升安全性
 3. **定期更換密鑰** - 養成好習慣
 4. **小額測試** - 首次使用建議用小額測試
 
