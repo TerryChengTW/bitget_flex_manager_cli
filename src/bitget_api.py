@@ -20,12 +20,15 @@ def load_config(allow_file_selection=False):
             import tkinter as tk
             from tkinter import filedialog
             
-            # 創建隱藏的主視窗
+            # 創建主視窗並配置為適合 macOS 的設定
             root = tk.Tk()
-            root.withdraw()  # 隱藏主視窗
+            root.title("選擇配置文件")
+            root.geometry("1x1+200+200")  # 設定很小的視窗大小和位置
+            
+            # macOS 相容性設定
             root.attributes('-topmost', True)  # 讓對話框置頂
             root.lift()  # 提升到前台
-            root.focus_force()  # 強制獲得焦點
+            root.update()  # 確保視窗更新
             
             # 設置預設目錄
             initial_dir = os.path.dirname(__file__)
@@ -39,11 +42,12 @@ def load_config(allow_file_selection=False):
                 filetypes=[
                     ("JSON files", "*.json"),
                     ("All files", "*.*")
-                ],
-                parent=root
+                ]
             )
             
-            root.destroy()  # 關閉隱藏視窗
+            # 關閉主視窗
+            root.quit()
+            root.destroy()
             
             if not config_path:  # 用戶取消選擇
                 print("[取消] 用戶取消文件選擇")
@@ -52,8 +56,8 @@ def load_config(allow_file_selection=False):
             # 保存用戶選擇的路徑
             _selected_config_path = config_path
             
-        except:
-            print("[錯誤] 文件對話框無法使用")
+        except Exception as e:
+            print(f"[錯誤] 文件對話框無法使用: {e}")
             return None
     else:
         # 如果用戶已經選擇過配置文件，使用選擇的路徑
