@@ -339,6 +339,10 @@ def savings_management_workflow():
         return False
     operations, subscribe_precision = result
     
+    # 如果沒有需要執行的操作，直接成功返回
+    if not operations:
+        return True
+    
     # 步驟4: 執行申購操作
     if not step4_execute_operations(coin, selected_product, operations, subscribe_precision):
         return False
@@ -644,10 +648,10 @@ def step3_user_selection(coin, selected_product, account_status):
                     'account_name': account['name'],
                     'action': 'subscribe',
                     'amount': can_deposit,
-                    'reason': f"申購 {can_deposit:.6f} (錢包可用: {account['wallet']:.6f})"
+                    'reason': f"申購 {can_deposit} (錢包可用: {account['wallet']})"
                 })
             else:
-                print(f"  跳過 {account['name']}: 錢包餘額不足最小申購金額{min_purchase_amount} (當前: {account['wallet']:.6f})")
+                print(f"  跳過 {account['name']}: 錢包餘額不足最小申購金額{min_purchase_amount} (當前: {account['wallet']})")
         elif op_choice == '2':  # 取出到剩300
             if account['holding'] > tier1_limit:
                 redeem_amount = account['holding'] - tier1_limit
@@ -670,12 +674,12 @@ def step3_user_selection(coin, selected_product, account_status):
     if not operations:
         print("\n[信息] 沒有需要執行的操作")
         print("當前帳戶狀態已符合選擇的策略目標")
-        return []
+        return [], subscribe_precision
     
     print(f"\n[操作計劃]")
     for op in operations:
         action_text = "申購" if op['action'] == 'subscribe' else "贖回"
-        print(f"  {op['account_name']}: {action_text} {op['amount']:.6f} {coin}")
+        print(f"  {op['account_name']}: {action_text} {op['amount']} {coin}")
     
     # 確認執行
     try:
@@ -724,7 +728,7 @@ def step4_execute_operations(coin, selected_product, operations, subscribe_preci
                 print(f"申購 {formatted_amount} {coin} (原始: {amount}, 捨去後: {truncated_amount})")
                 result = savings_subscribe(product_id, period_type, formatted_amount, account_key=account_id)
             elif action == 'redeem':
-                print(f"贖回 {amount:.6f} {coin}")
+                print(f"贖回 {amount} {coin}")
                 result = savings_redeem(product_id, period_type, amount, account_key=account_id)
             else:
                 print(f"[錯誤] 未知操作類型: {action}")
@@ -809,15 +813,15 @@ def step5_final_query(coin, selected_product, original_account_status):
         if abs(holding_change) < 0.000001:
             change_desc = "無變化"
         elif holding_change > 0:
-            change_desc = f"申購 +{holding_change:.6f}"
+            change_desc = f"申購 +{holding_change}"
         else:
-            change_desc = f"贖回 {holding_change:.6f}"
+            change_desc = f"贖回 {holding_change}"
         
         # 帳戶名稱
         account_type = after_data.get('account_info', {}).get('type', '')
         account_name = "主帳戶" if account_type == 'main' else f"子帳戶{account_id}"
         
-        print(f"{account_name:<8} {before_holding:<12.6f} {before_wallet:<12.6f} {after_holding:<12.6f} {after_wallet:<12.6f} {change_desc:<20}")
+        print(f"{account_name:<8} {before_holding:<12} {before_wallet:<12} {after_holding:<12} {after_wallet:<12} {change_desc:<20}")
         
         # 累計統計
         total_before_holding += before_holding
@@ -833,11 +837,11 @@ def step5_final_query(coin, selected_product, original_account_status):
     if abs(total_holding_change) < 0.000001:
         total_change_desc = "無變化"
     elif total_holding_change > 0:
-        total_change_desc = f"總申購 +{total_holding_change:.6f}"
+        total_change_desc = f"總申購 +{total_holding_change}"
     else:
-        total_change_desc = f"總贖回 {total_holding_change:.6f}"
+        total_change_desc = f"總贖回 {total_holding_change}"
     
-    print(f"{'總計':<8} {total_before_holding:<12.6f} {total_before_wallet:<12.6f} {total_after_holding:<12.6f} {total_after_wallet:<12.6f} {total_change_desc:<20}")
+    print(f"{'總計':<8} {total_before_holding:<12} {total_before_wallet:<12} {total_after_holding:<12} {total_after_wallet:<12} {total_change_desc:<20}")
     
     # 階梯分析
     print(f"\n=== 📈 階梯分析 ===")
@@ -853,17 +857,17 @@ def step5_final_query(coin, selected_product, original_account_status):
         if after_holding > tier1_limit and len(apy_list) > 1:
             tier2_accounts += 1
             tier2_apy = apy_list[1].get('currentApy', '0')
-            print(f"  {account_name}: {after_holding:.2f} {coin} (第二階梯 {tier2_apy}%)")
+            print(f"  {account_name}: {after_holding} {coin} (第二階梯 {tier2_apy}%)")
         elif after_holding > tier1_limit:
             # 只有一個階梯，但超過了上限（理論上不應該發生）
             tier1_accounts += 1
             tier1_apy = apy_list[0].get('currentApy', '0')
-            print(f"  {account_name}: {after_holding:.2f} {coin} (超過第一階梯上限 {tier1_apy}%)")
+            print(f"  {account_name}: {after_holding} {coin} (超過第一階梯上限 {tier1_apy}%)")
         elif after_holding > 0:
             tier1_accounts += 1
             tier1_apy = apy_list[0].get('currentApy', '0')
             space_left = tier1_limit - after_holding
-            print(f"  {account_name}: {after_holding:.2f} {coin} (第一階梯 {tier1_apy}%, 還可存{space_left:.2f})")
+            print(f"  {account_name}: {after_holding} {coin} (第一階梯 {tier1_apy}%, 還可存{space_left})")
         else:
             print(f"  {account_name}: 0.00 {coin} (未投資)")
     
@@ -1013,14 +1017,14 @@ def transfer_step1_query_balances(coin):
                 frozen = float(wallet_data[0].get('frozen', '0'))
         
         total_balance = available + frozen
-        print(f"{account_name:<12} {account_type:<6} {available:<15.6f} {frozen:<15.6f} {total_balance:<15.6f}")
+        print(f"{account_name:<12} {account_type:<6} {available:<15} {frozen:<15} {total_balance:<15}")
         
         total_available += available
         total_frozen += frozen
     
     print("-" * 70)
     total_all = total_available + total_frozen
-    print(f"{'總計':<12} {'--':<6} {total_available:<15.6f} {total_frozen:<15.6f} {total_all:<15.6f}")
+    print(f"{'總計':<12} {'--':<6} {total_available:<15} {total_frozen:<15} {total_all:<15}")
     
     return account_balances
 
@@ -1070,7 +1074,7 @@ def transfer_step2_user_selection(coin, account_balances):
     operations = []
     
     if direction_choice == '1':  # 主轉子
-        print(f"\n[主帳戶轉出] 主帳戶可用餘額: {main_balance:.6f} {coin}")
+        print(f"\n[主帳戶轉出] 主帳戶可用餘額: {main_balance} {coin}")
         
         if main_balance <= 0:
             print("[錯誤] 主帳戶餘額不足")
@@ -1091,7 +1095,7 @@ def transfer_step2_user_selection(coin, account_balances):
         print(f"\n[目標選擇]")
         print("0. 所有子帳戶")
         for i, sub in enumerate(sub_accounts):
-            print(f"{i+1}. {sub['name']} (當前餘額: {sub['balance']:.6f})")
+            print(f"{i+1}. {sub['name']} (當前餘額: {sub['balance']})")
         print(f"多選範例: 輸入 1,2,3 選擇多個帳戶")
         
         try:
@@ -1132,14 +1136,14 @@ def transfer_step2_user_selection(coin, account_balances):
             # 檢查總金額是否超出主帳戶餘額
             total_transfer_amount = transfer_amount_per_account * len(selected_subs)
             if total_transfer_amount > main_balance:
-                print(f"[錯誤] 總轉帳金額 {total_transfer_amount:.6f} 超過主帳戶餘額 {main_balance:.6f}")
+                print(f"[錯誤] 總轉帳金額 {total_transfer_amount} 超過主帳戶餘額 {main_balance}")
                 
                 # 計算在當前金額下最多可以轉幾個帳戶
                 max_accounts = int(main_balance / transfer_amount_per_account)
                 if max_accounts > 0:
                     remaining_balance = main_balance - (max_accounts * transfer_amount_per_account)
-                    print(f"[建議] 以每個 {transfer_amount_per_account:.6f} {coin} 計算，最多可轉 {max_accounts} 個帳戶")
-                    print(f"        這樣會用掉 {max_accounts * transfer_amount_per_account:.6f} {coin}，剩餘 {remaining_balance:.6f} {coin}")
+                    print(f"[建議] 以每個 {transfer_amount_per_account} {coin} 計算，最多可轉 {max_accounts} 個帳戶")
+                    print(f"        這樣會用掉 {max_accounts * transfer_amount_per_account} {coin}，剩餘 {remaining_balance} {coin}")
                     
                     # 詢問用戶是否要選前N個帳戶
                     try:
@@ -1149,7 +1153,7 @@ def transfer_step2_user_selection(coin, account_balances):
                             selected_subs = selected_subs[:max_accounts]
                             selected_names = [sub['name'] for sub in selected_subs]
                             print(f"[自動調整] 將轉帳到: {', '.join(selected_names)}")
-                            print(f"[新計劃] 總轉帳金額: {max_accounts * transfer_amount_per_account:.6f} {coin}")
+                            print(f"[新計劃] 總轉帳金額: {max_accounts * transfer_amount_per_account} {coin}")
                         else:
                             print("[取消] 請重新輸入轉帳金額或選擇帳戶")
                             return None
@@ -1157,7 +1161,7 @@ def transfer_step2_user_selection(coin, account_balances):
                         print("[取消] 用戶取消操作")
                         return None
                 else:
-                    print(f"[錯誤] 主帳戶餘額不足以轉帳 {transfer_amount_per_account:.6f} {coin} 到任何帳戶")
+                    print(f"[錯誤] 主帳戶餘額不足以轉帳 {transfer_amount_per_account} {coin} 到任何帳戶")
                     return None
             
             # 創建轉帳操作
@@ -1168,7 +1172,7 @@ def transfer_step2_user_selection(coin, account_balances):
                     'to_account': sub['id'],
                     'to_uuid': sub['uuid'],
                     'amount': transfer_amount_per_account,
-                    'description': f"主帳戶 → {sub['name']}: {transfer_amount_per_account:.6f} {coin}"
+                    'description': f"主帳戶 → {sub['name']}: {transfer_amount_per_account} {coin}"
                 })
                 
         except (ValueError, KeyboardInterrupt):
@@ -1204,7 +1208,7 @@ def transfer_step2_user_selection(coin, account_balances):
             print(f"\n[帳戶選擇]")
             print("0. 所有有餘額的子帳戶")
             for i, sub in enumerate(subs_with_balance):
-                print(f"{i+1}. {sub['name']} (餘額: {sub['balance']:.6f})")
+                print(f"{i+1}. {sub['name']} (餘額: {sub['balance']})")
             print(f"多選範例: 輸入 1,2,3 選擇多個帳戶")
             
             try:
@@ -1250,7 +1254,7 @@ def transfer_step2_user_selection(coin, account_balances):
                         'from_uuid': sub['uuid'],
                         'to_account': 'main',
                         'amount': sub['balance'],
-                        'description': f"{sub['name']} → 主帳戶: {sub['balance']:.6f} {coin} (全部餘額)"
+                        'description': f"{sub['name']} → 主帳戶: {sub['balance']} {coin} (全部餘額)"
                     })
                     
             except (ValueError, KeyboardInterrupt):
@@ -1272,13 +1276,13 @@ def transfer_step2_user_selection(coin, account_balances):
             # 篩選出餘額足夠的子帳戶
             eligible_subs = [sub for sub in subs_with_balance if sub['balance'] >= transfer_amount_per_account]
             if not eligible_subs:
-                print(f"[錯誤] 沒有子帳戶的餘額 >= {transfer_amount_per_account:.6f}")
+                print(f"[錯誤] 沒有子帳戶的餘額 >= {transfer_amount_per_account}")
                 return None
             
-            print(f"\n[帳戶選擇] (餘額 >= {transfer_amount_per_account:.6f})")
+            print(f"\n[帳戶選擇] (餘額 >= {transfer_amount_per_account})")
             print("0. 所有符合條件的子帳戶")
             for i, sub in enumerate(eligible_subs):
-                print(f"{i+1}. {sub['name']} (餘額: {sub['balance']:.6f})")
+                print(f"{i+1}. {sub['name']} (餘額: {sub['balance']})")
             print(f"多選範例: 輸入 1,2,3 選擇多個帳戶")
             
             try:
@@ -1324,7 +1328,7 @@ def transfer_step2_user_selection(coin, account_balances):
                         'from_uuid': sub['uuid'],
                         'to_account': 'main',
                         'amount': transfer_amount_per_account,
-                        'description': f"{sub['name']} → 主帳戶: {transfer_amount_per_account:.6f} {coin}"
+                        'description': f"{sub['name']} → 主帳戶: {transfer_amount_per_account} {coin}"
                     })
                     
             except (ValueError, KeyboardInterrupt):
@@ -1342,7 +1346,7 @@ def transfer_step2_user_selection(coin, account_balances):
         print(f"  {op['description']}")
         total_amount += op['amount']
     
-    print(f"\n[總計] 將轉帳 {total_amount:.6f} {coin}")
+    print(f"\n[總計] 將轉帳 {total_amount} {coin}")
     
     # 確認執行
     try:
@@ -1467,15 +1471,15 @@ def transfer_step4_final_query(coin, original_balances):
         if abs(balance_change) < 0.000001:
             change_desc = "無變化"
         elif balance_change > 0:
-            change_desc = f"轉入 +{balance_change:.6f}"
+            change_desc = f"轉入 +{balance_change}"
         else:
-            change_desc = f"轉出 {balance_change:.6f}"
+            change_desc = f"轉出 {balance_change}"
         
         # 帳戶名稱
         account_type = after_data.get('account_info', {}).get('type', '')
         account_name = "主帳戶" if account_type == 'main' else f"子帳戶{account_id}"
         
-        print(f"{account_name:<12} {before_balance:<15.6f} {after_balance:<15.6f} {change_desc:<20}")
+        print(f"{account_name:<12} {before_balance:<15} {after_balance:<15} {change_desc:<20}")
         
         # 累計統計
         total_before += before_balance
@@ -1487,9 +1491,9 @@ def transfer_step4_final_query(coin, original_balances):
     if abs(total_change) < 0.000001:
         total_change_desc = "無變化"
     else:
-        total_change_desc = f"淨變化 {total_change:+.6f}"
+        total_change_desc = f"淨變化 {total_change}"
     
-    print(f"{'總計':<12} {total_before:<15.6f} {total_after:<15.6f} {total_change_desc:<20}")
+    print(f"{'總計':<12} {total_before:<15} {total_after:<15} {total_change_desc:<20}")
     
     return True
 
