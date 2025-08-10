@@ -86,13 +86,18 @@ jobs:
     - name: Download all artifacts
       uses: actions/download-artifact@v4
 
-    - name: List downloaded artifacts
-      run: find . -name "*.exe" -o -name "*.app" | head -10
+    - name: Package macOS app
+      run: |
+        if [ -d "bitget-flex-manager-cli-macos.app" ]; then
+          cd bitget-flex-manager-cli-macos.app
+          zip -r ../bitget-flex-manager-cli-macos.app.zip bitget-flex-manager-cli.app
+          cd ..
+        fi
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
         files: |
           **/*.exe
-          **/*.app
+          *.zip
         generate_release_notes: true
