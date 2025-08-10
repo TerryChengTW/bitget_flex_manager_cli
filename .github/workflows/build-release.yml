@@ -115,12 +115,7 @@ jobs:
           # 確保所有執行檔都有正確權限
           chmod +x bitget-flex-manager-cli-macos.app/Contents/MacOS/*
           
-          echo "Signing app bundle (ad-hoc signing)..."
-          # Ad-hoc signing減少Gatekeeper警告，不需要開發者賬號
-          codesign --force --deep --sign - --options=runtime bitget-flex-manager-cli-macos.app || echo "Code signing failed, continuing..."
-          
-          echo "Verifying code signature..."
-          codesign --verify --verbose bitget-flex-manager-cli-macos.app || echo "Verification failed"
+          echo "Skipping code signing (not available on Linux runner)..."
           
           echo "Creating installation script..."
           echo '#!/bin/bash' > install-macos.sh
@@ -133,7 +128,7 @@ jobs:
           chmod +x install-macos.sh
           
           echo "Adding config template to package..."
-          cp source/src/bg_key_example.json .
+          cp bitget-flex-manager-cli-macos.app/Contents/Resources/bg_key_example.json .
           
           echo "Creating tar.gz archive (preserves permissions)..."
           tar -czf bitget-flex-manager-cli-macos.tar.gz bitget-flex-manager-cli-macos.app install-macos.sh bg_key_example.json
