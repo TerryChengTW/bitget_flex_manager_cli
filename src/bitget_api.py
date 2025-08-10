@@ -250,7 +250,7 @@ def subaccount_transfer(from_user_id, to_user_id, coin, amount, from_type='spot'
     body_data = {
         'fromType': from_type,
         'toType': to_type,
-        'amount': format(amount, '.15f').rstrip('0').rstrip('.'),
+        'amount': str(amount),
         'coin': coin,
         'fromUserId': str(from_user_id),
         'toUserId': str(to_user_id)

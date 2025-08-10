@@ -17,6 +17,34 @@ from version_checker import check_for_updates
 TARGET_SUBACCOUNT_COUNT = 20
 
 
+def safe_float(value):
+    """安全轉換為 8 位精度 float，使用 floor 確保轉帳一致性"""
+    if value is None or value == '' or value == 0:
+        return 0.0
+    try:
+        import math
+        # 使用 floor 到 8 位數，確保顯示的金額就是實際能轉的金額
+        return math.floor(float(value) * 100000000) / 100000000
+    except:
+        return 0.0
+
+
+
+def format_amount(value):
+    """格式化金額顯示，8 位精度，移除尾隨零"""
+    if abs(value) < 1e-8:
+        return '0'
+    formatted = f"{value:.8f}"
+    return formatted.rstrip('0').rstrip('.')
+
+def format_api_amount(value):
+    """格式化 API 用金額字串，8 位精度，使用 floor"""
+    import math
+    # 確保 API 金額也是 floor 到 8 位數
+    floored_value = math.floor(float(value) * 100000000) / 100000000
+    return f"{floored_value:.8f}".rstrip('0').rstrip('.')
+
+
 def generate_subaccount_name():
     """生成8位純英文字母的子帳戶名稱"""
     return ''.join(random.choices(string.ascii_lowercase, k=8))
@@ -396,7 +424,7 @@ def step1_query_savings_products(coin):
             max_val = apy.get('maxStepVal', '0')
             current_apy = apy.get('currentApy', '0')
             
-            if float(max_val) >= 120000000:  # 很大的數字表示無上限
+            if safe_float(max_val) >= 120000000:  # 很大的數字表示無上限
                 print(f"      - 階梯{j+1}: {min_val}+ {coin} → {current_apy}% 年化")
             else:
                 print(f"      - 階梯{j+1}: {min_val}-{max_val} {coin} → {current_apy}% 年化")
@@ -491,7 +519,7 @@ def step2_query_current_assets(coin, selected_product):
             # 查找該產品ID的持有量
             for item in result_list:
                 if item.get('productId') == product_id:
-                    personal_holding = float(item.get('holdAmount', '0'))
+                    personal_holding = safe_float(item.get('holdAmount', '0'))
                     break
             
             #print(f"  - 個人持有: {personal_holding:.6f} {coin}")
@@ -499,7 +527,7 @@ def step2_query_current_assets(coin, selected_product):
         if wallet_success and wallet_result.get('data'):
             wallet_data = wallet_result.get('data', [])
             if wallet_data:
-                available = float(wallet_data[0].get('available', '0'))
+                available = safe_float(wallet_data[0].get('available', '0'))
                 #print(f"  - 錢包可用: {available:.6f} {coin}")
         
     
@@ -537,24 +565,24 @@ def step3_user_selection(coin, selected_product, account_status):
             print(f"[調試] 獲取到 singleMinAmount: {single_min_amount}, subscribePrecision: {precision}")
             
             if single_min_amount:
-                min_purchase_amount = float(single_min_amount)
+                min_purchase_amount = safe_float(single_min_amount)
             if precision:
                 subscribe_precision = int(precision)
             break
     
-    print(f"[產品申購限制] 最小申購金額: {min_purchase_amount} {coin}, 精度: {subscribe_precision}")
+    print(f"[產品申購限制] 最小申購金額: {format_amount(min_purchase_amount)} {coin}, 精度: {subscribe_precision}")
     
     # 顯示階梯信息
     print(f"\n[產品階梯信息]")
-    tier1_limit = 0
+    tier1_limit = 0.0
     
     for i, apy in enumerate(apy_list):
         min_val = apy.get('minStepVal', '0')
         max_val = apy.get('maxStepVal', '0')
         current_apy = apy.get('currentApy', '0')
         if i == 0:  # 第一階梯
-            tier1_limit = float(max_val)
-        if float(max_val) >= 120000000:
+            tier1_limit = safe_float(max_val)
+        if safe_float(max_val) >= 120000000:
             print(f"  階梯{i+1}: {min_val}+ {coin} → {current_apy}% 年化")
         else:
             print(f"  階梯{i+1}: {min_val}-{max_val} {coin} → {current_apy}% 年化")
@@ -567,28 +595,28 @@ def step3_user_selection(coin, selected_product, account_status):
         account_type = status['account_info'].get('type')
         
         # 獲取個人持有量
-        personal_holding = 0
+        personal_holding = 0.0
         savings_result = status.get('savings_result', {})
         if savings_result.get('code') == '00000':
             result_list = savings_result.get('data', {}).get('resultList', [])
             for item in result_list:
                 if item.get('productId') == selected_product.get('productId'):
-                    personal_holding = float(item.get('holdAmount', '0'))
+                    personal_holding = safe_float(item.get('holdAmount', '0'))
                     break
         
         # 獲取錢包餘額
-        wallet_available = 0
+        wallet_available = 0.0
         wallet_result = status.get('wallet_result', {})
         if wallet_result.get('code') == '00000' and wallet_result.get('data'):
             wallet_data = wallet_result.get('data', [])
             if wallet_data:
-                wallet_available = float(wallet_data[0].get('available', '0'))
+                wallet_available = safe_float(wallet_data[0].get('available', '0'))
         
         # 計算到第一階梯上限的空間
-        space_to_tier1 = max(0, tier1_limit - personal_holding)
+        space_to_tier1 = max(0.0, tier1_limit - personal_holding)
         
         account_name = f"{'主帳戶' if account_type == 'main' else f'子帳戶{account_id}'}"
-        print(f"  {account_name}: 持有={personal_holding}, 錢包={wallet_available}, 到{tier1_limit}還可存={space_to_tier1}")
+        print(f"  {account_name}: 持有={format_amount(personal_holding)}, 錢包={format_amount(wallet_available)}, 到{format_amount(tier1_limit)}還可存={format_amount(space_to_tier1)}")
         
         valid_accounts.append({
             'id': account_id,
@@ -648,10 +676,10 @@ def step3_user_selection(coin, selected_product, account_status):
                     'account_name': account['name'],
                     'action': 'subscribe',
                     'amount': can_deposit,
-                    'reason': f"申購 {can_deposit} (錢包可用: {account['wallet']})"
+                    'reason': f"申購 {format_amount(can_deposit)} (錢包可用: {format_amount(account['wallet'])})"
                 })
             else:
-                print(f"  跳過 {account['name']}: 錢包餘額不足最小申購金額{min_purchase_amount} (當前: {account['wallet']})")
+                print(f"  跳過 {account['name']}: 錢包餘額不足最小申購金額{format_amount(min_purchase_amount)} (當前: {format_amount(account['wallet'])})")
         elif op_choice == '2':  # 取出到剩300
             if account['holding'] > tier1_limit:
                 redeem_amount = account['holding'] - tier1_limit
@@ -720,12 +748,9 @@ def step4_execute_operations(coin, selected_product, operations, subscribe_preci
         
         try:
             if action == 'subscribe':
-                # 根據申購精度格式化金額 (無條件捨去)
-                import math
-                precision_factor = 10 ** subscribe_precision
-                truncated_amount = math.floor(amount * precision_factor) / precision_factor
-                formatted_amount = f"{truncated_amount:.{subscribe_precision}f}"
-                print(f"申購 {formatted_amount} {coin} (原始: {amount}, 捨去後: {truncated_amount})")
+                # 8 位精度格式化
+                formatted_amount = format_api_amount(amount)
+                print(f"申購 {formatted_amount} {coin}")
                 result = savings_subscribe(product_id, period_type, formatted_amount, account_key=account_id)
             elif action == 'redeem':
                 print(f"贖回 {amount} {coin}")
@@ -783,7 +808,7 @@ def step5_final_query(coin, selected_product, original_account_status):
     
     # 解析產品階梯信息
     apy_list = selected_product.get('apyList', [])
-    tier1_limit = float(apy_list[0].get('maxStepVal', '0')) if apy_list else 0
+    tier1_limit = safe_float(apy_list[0].get('maxStepVal', '0')) if apy_list else 0.0
     
     print(f"產品: {product_name} (第一階梯上限: {tier1_limit} {coin})")
     print(f"{'帳戶':<8} {'執行前持有':<12} {'執行前錢包':<12} {'執行後持有':<12} {'執行後錢包':<12} {'變化':<20}")
@@ -810,7 +835,7 @@ def step5_final_query(coin, selected_product, original_account_status):
         wallet_change = after_wallet - before_wallet
         
         # 變化描述
-        if abs(holding_change) < 0.000001:
+        if abs(holding_change) < 1e-8:
             change_desc = "無變化"
         elif holding_change > 0:
             change_desc = f"申購 +{holding_change}"
@@ -834,7 +859,7 @@ def step5_final_query(coin, selected_product, original_account_status):
     total_holding_change = total_after_holding - total_before_holding
     total_wallet_change = total_after_wallet - total_before_wallet
     
-    if abs(total_holding_change) < 0.000001:
+    if abs(total_holding_change) < 1e-8:
         total_change_desc = "無變化"
     elif total_holding_change > 0:
         total_change_desc = f"總申購 +{total_holding_change}"
@@ -863,7 +888,7 @@ def step5_final_query(coin, selected_product, original_account_status):
             tier1_accounts += 1
             tier1_apy = apy_list[0].get('currentApy', '0')
             print(f"  {account_name}: {after_holding} {coin} (超過第一階梯上限 {tier1_apy}%)")
-        elif after_holding > 0:
+        elif after_holding > 0.0:
             tier1_accounts += 1
             tier1_apy = apy_list[0].get('currentApy', '0')
             space_left = tier1_limit - after_holding
@@ -886,7 +911,7 @@ def get_account_holding(account_data, product_id):
         result_list = savings_result.get('data', {}).get('resultList', [])
         for item in result_list:
             if item.get('productId') == product_id:
-                return float(item.get('holdAmount', '0'))
+                return safe_float(item.get('holdAmount', '0'))
     return 0.0
 
 
@@ -896,7 +921,7 @@ def get_account_wallet(account_data):
     if wallet_result.get('code') == '00000' and wallet_result.get('data'):
         wallet_data = wallet_result.get('data', [])
         if wallet_data:
-            return float(wallet_data[0].get('available', '0'))
+            return safe_float(wallet_data[0].get('available', '0'))
     return 0.0
 
 
@@ -974,22 +999,7 @@ def transfer_step1_query_balances(coin):
         # 查詢現貨錢包餘額
         wallet_result = get_spot_assets(coin, account_id)
         
-        # ETH精度處理：將查詢結果直接調整為8位精度並存入account_balances
-        if coin == 'ETH' and wallet_result.get('code') == '00000' and wallet_result.get('data'):
-            import math
-            wallet_data = wallet_result.get('data', [])
-            if wallet_data:
-                # 調整available和frozen為8位精度
-                original_available = float(wallet_data[0].get('available', '0'))
-                original_frozen = float(wallet_data[0].get('frozen', '0'))
-                
-                precision_factor = 10 ** 8
-                adjusted_available = math.floor(original_available * precision_factor) / precision_factor
-                adjusted_frozen = math.floor(original_frozen * precision_factor) / precision_factor
-                
-                # 直接修改wallet_result中的數據
-                wallet_result['data'][0]['available'] = str(adjusted_available)
-                wallet_result['data'][0]['frozen'] = str(adjusted_frozen)
+        # 統一 8 位精度處理，不需特殊處理 ETH
         
         account_balances[account_id] = {
             'account_info': accounts[account_id],
@@ -1001,8 +1011,8 @@ def transfer_step1_query_balances(coin):
         if wallet_success and wallet_result.get('data'):
             wallet_data = wallet_result.get('data', [])
             if wallet_data:
-                available = float(wallet_data[0].get('available', '0'))
-                frozen = float(wallet_data[0].get('frozen', '0'))
+                available = safe_float(wallet_data[0].get('available', '0'))
+                frozen = safe_float(wallet_data[0].get('frozen', '0'))
                 total = available + frozen
                 #print(f"  - 可用: {available:.6f} {coin}")
                 #print(f"  - 凍結: {frozen:.6f} {coin}")
@@ -1017,8 +1027,8 @@ def transfer_step1_query_balances(coin):
     print(f"{'帳戶':<12} {'類型':<6} {'可用餘額':<15} {'凍結餘額':<15} {'總餘額':<15}")
     print("-" * 70)
     
-    total_available = 0
-    total_frozen = 0
+    total_available = 0.0
+    total_frozen = 0.0
     
     for account_id, balance_info in account_balances.items():
         account_type = balance_info['account_info'].get('type')
@@ -1030,18 +1040,18 @@ def transfer_step1_query_balances(coin):
         if wallet_result.get('code') == '00000' and wallet_result.get('data'):
             wallet_data = wallet_result.get('data', [])
             if wallet_data:
-                available = float(wallet_data[0].get('available', '0'))
-                frozen = float(wallet_data[0].get('frozen', '0'))
+                available = safe_float(wallet_data[0].get('available', '0'))
+                frozen = safe_float(wallet_data[0].get('frozen', '0'))
         
         total_balance = available + frozen
-        print(f"{account_name:<12} {account_type:<6} {format(available, '.15f').rstrip('0').rstrip('.'):<15} {format(frozen, '.15f').rstrip('0').rstrip('.'):<15} {format(total_balance, '.15f').rstrip('0').rstrip('.'):<15}")
+        print(f"{account_name:<12} {account_type:<6} {format_amount(available):<15} {format_amount(frozen):<15} {format_amount(total_balance):<15}")
         
         total_available += available
         total_frozen += frozen
     
     print("-" * 70)
     total_all = total_available + total_frozen
-    print(f"{'總計':<12} {'--':<6} {format(total_available, '.15f').rstrip('0').rstrip('.'):<15} {format(total_frozen, '.15f').rstrip('0').rstrip('.'):<15} {format(total_all, '.15f').rstrip('0').rstrip('.'):<15}")
+    print(f"{'總計':<12} {'--':<6} {format_amount(total_available):<15} {format_amount(total_frozen):<15} {format_amount(total_all):<15}")
     
     return account_balances
 
@@ -1051,7 +1061,7 @@ def transfer_step2_user_selection(coin, account_balances):
     print(f"\n=== 步驟2: 選擇轉帳策略 ===")
     
     # 分析帳戶狀況
-    main_balance = 0
+    main_balance = 0.0
     sub_accounts = []
     
     for account_id, balance_info in account_balances.items():
@@ -1062,7 +1072,7 @@ def transfer_step2_user_selection(coin, account_balances):
         if wallet_result.get('code') == '00000' and wallet_result.get('data'):
             wallet_data = wallet_result.get('data', [])
             if wallet_data:
-                available = float(wallet_data[0].get('available', '0'))
+                available = safe_float(wallet_data[0].get('available', '0'))
         
         if account_type == 'main':
             main_balance = available
@@ -1091,17 +1101,17 @@ def transfer_step2_user_selection(coin, account_balances):
     operations = []
     
     if direction_choice == '1':  # 主轉子
-        print(f"\n[主帳戶轉出] 主帳戶可用餘額: {format(main_balance, '.15f').rstrip('0').rstrip('.')} {coin}")
+        print(f"\n[主帳戶轉出] 主帳戶可用餘額: {format_amount(main_balance)} {coin}")
         
-        if main_balance <= 0:
+        if main_balance <= 0.0:
             print("[錯誤] 主帳戶餘額不足")
             return None
         
         # 輸入每個帳號的轉帳金額
         try:
             amount_input = input(f"請輸入每個帳號的轉帳金額: ").strip()
-            transfer_amount_per_account = float(amount_input)
-            if transfer_amount_per_account <= 0:
+            transfer_amount_per_account = safe_float(amount_input)
+            if transfer_amount_per_account <= 0.0:
                 print("[錯誤] 轉帳金額必須大於0")
                 return None
         except (ValueError, KeyboardInterrupt):
@@ -1112,7 +1122,7 @@ def transfer_step2_user_selection(coin, account_balances):
         print(f"\n[目標選擇]")
         print("0. 所有子帳戶")
         for i, sub in enumerate(sub_accounts):
-            print(f"{i+1}. {sub['name']} (當前餘額: {format(sub['balance'], '.15f').rstrip('0').rstrip('.')})")
+            print(f"{i+1}. {sub['name']} (當前餘額: {format_amount(sub['balance'])})")
         print(f"多選範例: 輸入 1,2,3 選擇多個帳戶")
         
         try:
@@ -1200,7 +1210,7 @@ def transfer_step2_user_selection(coin, account_balances):
         print(f"\n[子帳戶轉回]")
         
         # 顯示有餘額的子帳戶
-        subs_with_balance = [sub for sub in sub_accounts if sub['balance'] > 0]
+        subs_with_balance = [sub for sub in sub_accounts if sub['balance'] > 0.0]
         if not subs_with_balance:
             print("[錯誤] 沒有子帳戶有餘額")
             return None
@@ -1225,7 +1235,7 @@ def transfer_step2_user_selection(coin, account_balances):
             print(f"\n[帳戶選擇]")
             print("0. 所有有餘額的子帳戶")
             for i, sub in enumerate(subs_with_balance):
-                print(f"{i+1}. {sub['name']} (餘額: {format(sub['balance'], '.15f').rstrip('0').rstrip('.')})")
+                print(f"{i+1}. {sub['name']} (餘額: {format_amount(sub['balance'])})")
             print(f"多選範例: 輸入 1,2,3 選擇多個帳戶")
             
             try:
@@ -1271,7 +1281,7 @@ def transfer_step2_user_selection(coin, account_balances):
                         'from_uuid': sub['uuid'],
                         'to_account': 'main',
                         'amount': sub['balance'],
-                        'description': f"{sub['name']} → 主帳戶: {format(sub['balance'], '.15f').rstrip('0').rstrip('.')} {coin} (全部餘額)"
+                        'description': f"{sub['name']} → 主帳戶: {format_amount(sub['balance'])} {coin} (全部餘額)"
                     })
                     
             except (ValueError, KeyboardInterrupt):
@@ -1282,8 +1292,8 @@ def transfer_step2_user_selection(coin, account_balances):
             # 指定金額轉回模式
             try:
                 amount_input = input(f"請輸入每個帳號的轉回金額: ").strip()
-                transfer_amount_per_account = float(amount_input)
-                if transfer_amount_per_account <= 0:
+                transfer_amount_per_account = safe_float(amount_input)
+                if transfer_amount_per_account <= 0.0:
                     print("[錯誤] 轉回金額必須大於0")
                     return None
             except (ValueError, KeyboardInterrupt):
@@ -1299,7 +1309,7 @@ def transfer_step2_user_selection(coin, account_balances):
             print(f"\n[帳戶選擇] (餘額 >= {transfer_amount_per_account})")
             print("0. 所有符合條件的子帳戶")
             for i, sub in enumerate(eligible_subs):
-                print(f"{i+1}. {sub['name']} (餘額: {format(sub['balance'], '.15f').rstrip('0').rstrip('.')})")
+                print(f"{i+1}. {sub['name']} (餘額: {format_amount(sub['balance'])})")
             print(f"多選範例: 輸入 1,2,3 選擇多個帳戶")
             
             try:
@@ -1363,7 +1373,7 @@ def transfer_step2_user_selection(coin, account_balances):
         print(f"  {op['description']}")
         total_amount += op['amount']
     
-    print(f"\n[總計] 將轉帳 {format(total_amount, '.15f').rstrip('0').rstrip('.')} {coin}")
+    print(f"\n[總計] 將轉帳 {format_amount(total_amount)} {coin}")
     
     # 確認執行
     try:
@@ -1397,7 +1407,7 @@ def transfer_step3_execute_operations(coin, operations):
         amount = op['amount']
         description = op['description']
         
-        formatted_amount = format(amount, '.15f').rstrip('0').rstrip('.')
+        formatted_amount = format_amount(amount)
         formatted_description = description.replace(f'{amount} {coin}', f'{formatted_amount} {coin}')
         print(f"\n[執行 {i+1}/{total_count}] {formatted_description}")
         
@@ -1431,16 +1441,18 @@ def transfer_step3_execute_operations(coin, operations):
             import math
             precision_factor = 10 ** optimal_precision
             adjusted_amount = math.floor(amount * precision_factor) / precision_factor
-            print(f"[精度調整] 原始: {format(amount, '.15f').rstrip('0').rstrip('.')} → 調整: {format(adjusted_amount, '.15f').rstrip('0').rstrip('.')}")
+            print(f"[精度調整] 原始: {format_amount(amount)} → 調整: {format_amount(adjusted_amount)}")
         else:
             adjusted_amount = amount
         
         try:
             if transfer_type == 'main_to_sub':
                 # 主帳戶轉子帳戶
+                # 格式化金額為API字符串格式
+                api_amount = format_api_amount(adjusted_amount)
                 result = transfer_to_subaccount(
                     coin=coin,
-                    amount=adjusted_amount,
+                    amount=api_amount,
                     sub_account_uid=op['to_uuid'],
                     account_key='main'
                 )
@@ -1449,9 +1461,11 @@ def transfer_step3_execute_operations(coin, operations):
                 main_account_uid = get_main_account_uid()
                 
                 if main_account_uid:
+                    # 格式化金額為API字符串格式
+                    api_amount = format_api_amount(adjusted_amount)
                     result = transfer_to_main_account(
                         coin=coin,
-                        amount=adjusted_amount,
+                        amount=api_amount,
                         sub_account_uid=op['from_uuid'],
                         main_account_uid=main_account_uid,
                         account_key='main'
@@ -1506,8 +1520,8 @@ def transfer_step4_final_query(coin, original_balances):
     print(f"{'帳戶':<12} {'轉帳前':<15} {'轉帳後':<15} {'變化':<20}")
     print("-" * 65)
     
-    total_before = 0
-    total_after = 0
+    total_before = 0.0
+    total_after = 0.0
     
     for account_id in final_balances.keys():
         # 轉帳前餘額
@@ -1522,18 +1536,18 @@ def transfer_step4_final_query(coin, original_balances):
         balance_change = after_balance - before_balance
         
         # 變化描述
-        if abs(balance_change) < 1e-15:  # 使用更小的閾值來識別微小變化
+        if abs(balance_change) < 1e-8:  # 使用更小的閾值來識別微小變化
             change_desc = "無變化"
-        elif balance_change > 0:
-            change_desc = f"轉入 +{format(balance_change, '.15f').rstrip('0').rstrip('.')}"
+        elif balance_change > 0.0:
+            change_desc = f"轉入 +{format_amount(balance_change)}"
         else:
-            change_desc = f"轉出 {format(balance_change, '.15f').rstrip('0').rstrip('.')}"
+            change_desc = f"轉出 {format_amount(balance_change)}"
         
         # 帳戶名稱
         account_type = after_data.get('account_info', {}).get('type', '')
         account_name = "主帳戶" if account_type == 'main' else f"子帳戶{account_id}"
         
-        print(f"{account_name:<12} {format(before_balance, '.15f').rstrip('0').rstrip('.'):<15} {format(after_balance, '.15f').rstrip('0').rstrip('.'):<15} {change_desc:<20}")
+        print(f"{account_name:<12} {format_amount(before_balance):<15} {format_amount(after_balance):<15} {change_desc:<20}")
         
         # 累計統計
         total_before += before_balance
@@ -1542,88 +1556,72 @@ def transfer_step4_final_query(coin, original_balances):
     # 顯示總計
     print("-" * 65)
     total_change = total_after - total_before
-    if abs(total_change) < 1e-15:
+    if abs(total_change) < 1e-8:
         total_change_desc = "無變化"
     else:
-        total_change_desc = f"淨變化 {format(total_change, '.15f').rstrip('0').rstrip('.')}"
+        total_change_desc = f"淨變化 {format_amount(total_change)}"
     
-    print(f"{'總計':<12} {format(total_before, '.15f').rstrip('0').rstrip('.'):<15} {format(total_after, '.15f').rstrip('0').rstrip('.'):<15} {total_change_desc:<20}")
+    print(f"{'總計':<12} {format_amount(total_before):<15} {format_amount(total_after):<15} {total_change_desc:<20}")
     
     return True
 
 
 def find_optimal_precision_and_execute(transfer_type, op, coin, amount):
-    """找到最佳的轉帳精度並執行第一筆轉帳
-    
-    從10位小數開始嘗試，逐步降低精度直到轉帳成功
+    """統一使用 8 位精度執行轉帳
     
     Returns:
-        tuple: (精度位數, 轉帳結果) 或 None (如果失敗)
+        tuple: (8, 轉帳結果) 或 None (如果失敗)
     """
-    import math
+    # 統一使用 8 位精度
+    test_amount = round(amount, 8)
     
-    # 根據金額的小數位數來決定測試起始精度
-    import decimal
-    amount_str = f"{amount:.15f}".rstrip('0').rstrip('.')
-    if '.' in amount_str:
-        actual_precision = len(amount_str.split('.')[1])
-    else:
-        actual_precision = 0
-    
-    # 從實際精度開始測試
-    start_precision = actual_precision
-    
-    for precision in range(start_precision, -1, -1):  # 從實際精度降到0位
-        # 使用無條件捨去調整金額
-        precision_factor = 10 ** precision
-        test_amount = math.floor(amount * precision_factor) / precision_factor
+    # 如果調整後金額為0，跳過
+    if test_amount <= 0:
+        return None
         
-        # 如果調整後金額為0，跳過
-        if test_amount <= 0:
-            continue
-            
-        print(f"  測試 {precision} 位精度: {format(test_amount, '.15f').rstrip('0').rstrip('.')}")
-        
-        # 執行測試轉帳
-        try:
-            if transfer_type == 'main_to_sub':
-                result = transfer_to_subaccount(
+    print(f"  測試轉帳金額: {format_amount(test_amount)}")
+    
+    # 執行測試轉帳
+    try:
+        if transfer_type == 'main_to_sub':
+            # 格式化金額為API字符串格式
+            api_test_amount = format_api_amount(test_amount)
+            result = transfer_to_subaccount(
+                coin=coin,
+                amount=api_test_amount,
+                sub_account_uid=op['to_uuid'],
+                account_key='main'
+            )
+        elif transfer_type == 'sub_to_main':
+            main_account_uid = get_main_account_uid()
+            if main_account_uid:
+                # 格式化金額為API字符串格式
+                api_test_amount = format_api_amount(test_amount)
+                result = transfer_to_main_account(
                     coin=coin,
-                    amount=test_amount,
-                    sub_account_uid=op['to_uuid'],
+                    amount=api_test_amount,
+                    sub_account_uid=op['from_uuid'],
+                    main_account_uid=main_account_uid,
                     account_key='main'
                 )
-            elif transfer_type == 'sub_to_main':
-                main_account_uid = get_main_account_uid()
-                if main_account_uid:
-                    result = transfer_to_main_account(
-                        coin=coin,
-                        amount=test_amount,
-                        sub_account_uid=op['from_uuid'],
-                        main_account_uid=main_account_uid,
-                        account_key='main'
-                    )
-                else:
-                    continue
             else:
-                continue
+                return None
+        else:
+            return None
                 
-            # 檢查結果
-            if result.get('code') == '00000':
-                print(f"  ✓ {precision} 位精度成功")
-                return (precision, result)  # 返回精度和轉帳結果
-            elif result.get('code') == '40020':  # Parameter amount error
-                print(f"  ✗ {precision} 位精度失敗 (精度錯誤)")
-                continue
-            else:
-                print(f"  ✗ {precision} 位精度失敗: {result.get('msg', '未知錯誤')}")
-                continue
+        # 檢查結果
+        if result.get('code') == '00000':
+            print(f"  ✓ 轉帳成功")
+            return (8, result)  # 返回固定 8 位精度和轉帳結果
+        else:
+            print(f"  ✗ 轉帳失敗: {result.get('msg', '未知錯誤')}")
+            return None
                 
-        except Exception as e:
-            print(f"  ✗ {precision} 位精度異常: {e}")
-            continue
+    except Exception as e:
+        print(f"  ✗ 轉帳異常: {e}")
+        return None
     
-    return None  # 沒有找到可用精度
+    return None
 
 
 def get_account_spot_balance(account_data, coin=None):
@@ -1632,7 +1630,7 @@ def get_account_spot_balance(account_data, coin=None):
     if wallet_result.get('code') == '00000' and wallet_result.get('data'):
         wallet_data = wallet_result.get('data', [])
         if wallet_data:
-            available = float(wallet_data[0].get('available', '0'))
+            available = safe_float(wallet_data[0].get('available', '0'))
             return available
     return 0.0
 
