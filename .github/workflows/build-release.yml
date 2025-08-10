@@ -106,11 +106,13 @@ jobs:
 
     - name: Checkout source for config template
       uses: actions/checkout@v4
+      with:
+        path: source
       
     - name: Prepare config template
       run: |
-        # 直接從source code複製config template
-        cp src/bg_key_example.json . 
+        # 從checkout的source目錄複製config template
+        cp source/src/bg_key_example.json . 
         ls -la bg_key_example.json
 
     - name: Create Release
