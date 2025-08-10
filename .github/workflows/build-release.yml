@@ -86,20 +86,35 @@ jobs:
     - name: Download all artifacts
       uses: actions/download-artifact@v4
 
-    - name: Package macOS app
+    - name: Package macOS app  
       run: |
         if [ -d "bitget-flex-manager-cli-macos.app" ]; then
-          echo "Found .app bundle, creating zip..."
-          zip -r bitget-flex-manager-cli-macos.app.zip bitget-flex-manager-cli-macos.app
-          ls -la *.zip
+          echo "Found .app bundle, ensuring proper permissions..."
+          # 確保所有執行檔都有正確權限
+          chmod +x bitget-flex-manager-cli-macos.app/Contents/MacOS/*
+          
+          echo "Signing app bundle (ad-hoc signing)..."
+          # Ad-hoc signing減少Gatekeeper警告，不需要開發者賬號
+          codesign --force --deep --sign - bitget-flex-manager-cli-macos.app || echo "Code signing failed, continuing..."
+          
+          echo "Creating tar.gz archive (preserves permissions)..."
+          tar -czf bitget-flex-manager-cli-macos.app.tar.gz bitget-flex-manager-cli-macos.app
+          ls -la *.tar.gz
         else
           echo "No .app bundle found"
         fi
+
+    - name: Prepare config template
+      run: |
+        # 從Windows artifact中複製出config template (因為兩個平台都有)
+        cp bitget-flex-manager-cli-windows.exe/bg_key_example.json . || echo "Config file not found in Windows artifact"
+        ls -la bg_key_example.json || echo "No config file available"
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
         files: |
           **/*.exe
-          *.zip
+          *.tar.gz
+          bg_key_example.json
         generate_release_notes: true
