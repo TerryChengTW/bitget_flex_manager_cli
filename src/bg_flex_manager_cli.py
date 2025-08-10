@@ -1371,6 +1371,7 @@ def transfer_step3_execute_operations(coin, operations):
     
     success_count = 0
     total_count = len(operations)
+    optimal_precision = None  # 用於存儲找到的最佳精度
     
     print(f"[信息] 開始執行 {total_count} 個轉帳操作...")
     
@@ -1381,12 +1382,46 @@ def transfer_step3_execute_operations(coin, operations):
         
         print(f"\n[執行 {i+1}/{total_count}] {description}")
         
+        # 如果是第一筆轉帳且還沒找到最佳精度，進行精度嘗試兼真實執行
+        if i == 0 and optimal_precision is None:
+            print(f"[精度測試] 正在測試最佳轉帳精度...")
+            result = find_optimal_precision_and_execute(transfer_type, op, coin, amount)
+            
+            if result is None:
+                print(f"[錯誤] 無法找到可用的轉帳精度")
+                continue
+            else:
+                optimal_precision, transfer_result = result
+                print(f"[找到] 最佳精度: {optimal_precision} 位小數")
+                
+                # 處理轉帳結果 (就像正常轉帳一樣)
+                if transfer_result.get('code') == '00000':
+                    transfer_id = transfer_result.get('data', {}).get('transferId', '')
+                    print(f"  [OK] 成功 (轉帳ID: {transfer_id})")
+                    success_count += 1
+                else:
+                    error_msg = transfer_result.get('msg', '未知錯誤')
+                    print(f"  [ERROR] 失敗: {error_msg}")
+                    print(f"     詳細: {transfer_result}")
+                
+                time.sleep(0.5)  # API 限制延遲
+                continue
+        
+        # 使用找到的精度調整金額
+        if optimal_precision is not None:
+            import math
+            precision_factor = 10 ** optimal_precision
+            adjusted_amount = math.floor(amount * precision_factor) / precision_factor
+            print(f"[精度調整] 原始: {amount} → 調整: {adjusted_amount}")
+        else:
+            adjusted_amount = amount
+        
         try:
             if transfer_type == 'main_to_sub':
                 # 主帳戶轉子帳戶
                 result = transfer_to_subaccount(
                     coin=coin,
-                    amount=amount,
+                    amount=adjusted_amount,
                     sub_account_uid=op['to_uuid'],
                     account_key='main'
                 )
@@ -1397,7 +1432,7 @@ def transfer_step3_execute_operations(coin, operations):
                 if main_account_uid:
                     result = transfer_to_main_account(
                         coin=coin,
-                        amount=amount,
+                        amount=adjusted_amount,
                         sub_account_uid=op['from_uuid'],
                         main_account_uid=main_account_uid,
                         account_key='main'
@@ -1496,6 +1531,69 @@ def transfer_step4_final_query(coin, original_balances):
     print(f"{'總計':<12} {total_before:<15} {total_after:<15} {total_change_desc:<20}")
     
     return True
+
+
+def find_optimal_precision_and_execute(transfer_type, op, coin, amount):
+    """找到最佳的轉帳精度並執行第一筆轉帳
+    
+    從10位小數開始嘗試，逐步降低精度直到轉帳成功
+    
+    Returns:
+        tuple: (精度位數, 轉帳結果) 或 None (如果失敗)
+    """
+    import math
+    
+    for precision in range(10, -1, -1):  # 從10位降到0位
+        # 使用無條件捨去調整金額
+        precision_factor = 10 ** precision
+        test_amount = math.floor(amount * precision_factor) / precision_factor
+        
+        # 如果調整後金額為0，跳過
+        if test_amount <= 0:
+            continue
+            
+        print(f"  測試 {precision} 位精度: {test_amount}")
+        
+        # 執行測試轉帳
+        try:
+            if transfer_type == 'main_to_sub':
+                result = transfer_to_subaccount(
+                    coin=coin,
+                    amount=test_amount,
+                    sub_account_uid=op['to_uuid'],
+                    account_key='main'
+                )
+            elif transfer_type == 'sub_to_main':
+                main_account_uid = get_main_account_uid()
+                if main_account_uid:
+                    result = transfer_to_main_account(
+                        coin=coin,
+                        amount=test_amount,
+                        sub_account_uid=op['from_uuid'],
+                        main_account_uid=main_account_uid,
+                        account_key='main'
+                    )
+                else:
+                    continue
+            else:
+                continue
+                
+            # 檢查結果
+            if result.get('code') == '00000':
+                print(f"  ✓ {precision} 位精度成功")
+                return (precision, result)  # 返回精度和轉帳結果
+            elif result.get('code') == '40020':  # Parameter amount error
+                print(f"  ✗ {precision} 位精度失敗 (精度錯誤)")
+                continue
+            else:
+                print(f"  ✗ {precision} 位精度失敗: {result.get('msg', '未知錯誤')}")
+                continue
+                
+        except Exception as e:
+            print(f"  ✗ {precision} 位精度異常: {e}")
+            continue
+    
+    return None  # 沒有找到可用精度
 
 
 def get_account_spot_balance(account_data):
