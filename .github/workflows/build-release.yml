@@ -32,31 +32,43 @@ jobs:
         pip install pyinstaller
 
     - name: Build executable
+      shell: bash
       run: |
         if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
           pyinstaller --onefile --console --add-data "src/bg_key_example.json;." src/bg_flex_manager_cli.py --name bitget-flex-manager-cli
         else
-          pyinstaller --onefile --console --add-data "src/bg_key_example.json:." src/bg_flex_manager_cli.py --name bitget-flex-manager-cli --windowed
-          # Create .app bundle for macOS
+          # macOS build
+          pyinstaller --onefile --console --add-data "src/bg_key_example.json:." src/bg_flex_manager_cli.py --name bitget-flex-manager-cli
+          
+          # Create .app bundle structure
           mkdir -p "bitget-flex-manager-cli.app/Contents/MacOS"
           mkdir -p "bitget-flex-manager-cli.app/Contents/Resources"
-          mv dist/bitget-flex-manager-cli "bitget-flex-manager-cli.app/Contents/MacOS/"
-          cat > "bitget-flex-manager-cli.app/Contents/Info.plist" << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>CFBundleName</key>
-              <string>Bitget Flex Manager CLI</string>
-              <key>CFBundleIdentifier</key>
-              <string>com.bitget.flex-manager-cli</string>
-              <key>CFBundleVersion</key>
-              <string>1.0.0</string>
-              <key>CFBundleExecutable</key>
-              <string>bitget-flex-manager-cli</string>
-          </dict>
-          </plist>
-          EOF
+          
+          # Move the executable to the app bundle
+          cp dist/bitget-flex-manager-cli "bitget-flex-manager-cli.app/Contents/MacOS/"
+          
+          # Create Info.plist
+          cat > "bitget-flex-manager-cli.app/Contents/Info.plist" << 'PLIST_EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Bitget Flex Manager CLI</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.bitget.flex-manager-cli</string>
+    <key>CFBundleVersion</key>
+    <string>1.0.0</string>
+    <key>CFBundleExecutable</key>
+    <string>bitget-flex-manager-cli</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.finance</string>
+</dict>
+</plist>
+PLIST_EOF
+          
+          # Move app bundle to dist directory
+          rm -rf dist/bitget-flex-manager-cli.app
           mv bitget-flex-manager-cli.app dist/
         fi
 
