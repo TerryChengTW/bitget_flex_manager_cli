@@ -974,6 +974,23 @@ def transfer_step1_query_balances(coin):
         # 查詢現貨錢包餘額
         wallet_result = get_spot_assets(coin, account_id)
         
+        # ETH精度處理：將查詢結果直接調整為8位精度並存入account_balances
+        if coin == 'ETH' and wallet_result.get('code') == '00000' and wallet_result.get('data'):
+            import math
+            wallet_data = wallet_result.get('data', [])
+            if wallet_data:
+                # 調整available和frozen為8位精度
+                original_available = float(wallet_data[0].get('available', '0'))
+                original_frozen = float(wallet_data[0].get('frozen', '0'))
+                
+                precision_factor = 10 ** 8
+                adjusted_available = math.floor(original_available * precision_factor) / precision_factor
+                adjusted_frozen = math.floor(original_frozen * precision_factor) / precision_factor
+                
+                # 直接修改wallet_result中的數據
+                wallet_result['data'][0]['available'] = str(adjusted_available)
+                wallet_result['data'][0]['frozen'] = str(adjusted_frozen)
+        
         account_balances[account_id] = {
             'account_info': accounts[account_id],
             'wallet_result': wallet_result
@@ -1074,7 +1091,7 @@ def transfer_step2_user_selection(coin, account_balances):
     operations = []
     
     if direction_choice == '1':  # 主轉子
-        print(f"\n[主帳戶轉出] 主帳戶可用餘額: {main_balance} {coin}")
+        print(f"\n[主帳戶轉出] 主帳戶可用餘額: {format(main_balance, '.20f').rstrip('0').rstrip('.')} {coin}")
         
         if main_balance <= 0:
             print("[錯誤] 主帳戶餘額不足")
@@ -1380,7 +1397,9 @@ def transfer_step3_execute_operations(coin, operations):
         amount = op['amount']
         description = op['description']
         
-        print(f"\n[執行 {i+1}/{total_count}] {description}")
+        formatted_amount = format(amount, '.20f').rstrip('0').rstrip('.')
+        formatted_description = description.replace(f'{amount} {coin}', f'{formatted_amount} {coin}')
+        print(f"\n[執行 {i+1}/{total_count}] {formatted_description}")
         
         # 如果是第一筆轉帳且還沒找到最佳精度，進行精度嘗試兼真實執行
         if i == 0 and optimal_precision is None:
@@ -1412,7 +1431,7 @@ def transfer_step3_execute_operations(coin, operations):
             import math
             precision_factor = 10 ** optimal_precision
             adjusted_amount = math.floor(amount * precision_factor) / precision_factor
-            print(f"[精度調整] 原始: {amount} → 調整: {adjusted_amount}")
+            print(f"[精度調整] 原始: {format(amount, '.20f').rstrip('0').rstrip('.')} → 調整: {format(adjusted_amount, '.20f').rstrip('0').rstrip('.')}")
         else:
             adjusted_amount = amount
         
@@ -1493,28 +1512,28 @@ def transfer_step4_final_query(coin, original_balances):
     for account_id in final_balances.keys():
         # 轉帳前餘額
         before_data = original_balances.get(account_id, {})
-        before_balance = get_account_spot_balance(before_data)
+        before_balance = get_account_spot_balance(before_data, coin)
         
         # 轉帳後餘額
         after_data = final_balances.get(account_id, {})
-        after_balance = get_account_spot_balance(after_data)
+        after_balance = get_account_spot_balance(after_data, coin)
         
         # 計算變化
         balance_change = after_balance - before_balance
         
         # 變化描述
-        if abs(balance_change) < 0.000001:
+        if abs(balance_change) < 1e-15:  # 使用更小的閾值來識別微小變化
             change_desc = "無變化"
         elif balance_change > 0:
-            change_desc = f"轉入 +{balance_change}"
+            change_desc = f"轉入 +{format(balance_change, '.20f').rstrip('0').rstrip('.')}"
         else:
-            change_desc = f"轉出 {balance_change}"
+            change_desc = f"轉出 {format(balance_change, '.20f').rstrip('0').rstrip('.')}"
         
         # 帳戶名稱
         account_type = after_data.get('account_info', {}).get('type', '')
         account_name = "主帳戶" if account_type == 'main' else f"子帳戶{account_id}"
         
-        print(f"{account_name:<12} {before_balance:<15} {after_balance:<15} {change_desc:<20}")
+        print(f"{account_name:<12} {format(before_balance, '.20f').rstrip('0').rstrip('.'):<15} {format(after_balance, '.20f').rstrip('0').rstrip('.'):<15} {change_desc:<20}")
         
         # 累計統計
         total_before += before_balance
@@ -1523,12 +1542,12 @@ def transfer_step4_final_query(coin, original_balances):
     # 顯示總計
     print("-" * 65)
     total_change = total_after - total_before
-    if abs(total_change) < 0.000001:
+    if abs(total_change) < 1e-15:
         total_change_desc = "無變化"
     else:
-        total_change_desc = f"淨變化 {total_change}"
+        total_change_desc = f"淨變化 {format(total_change, '.20f').rstrip('0').rstrip('.')}"
     
-    print(f"{'總計':<12} {total_before:<15} {total_after:<15} {total_change_desc:<20}")
+    print(f"{'總計':<12} {format(total_before, '.20f').rstrip('0').rstrip('.'):<15} {format(total_after, '.20f').rstrip('0').rstrip('.'):<15} {total_change_desc:<20}")
     
     return True
 
@@ -1543,7 +1562,18 @@ def find_optimal_precision_and_execute(transfer_type, op, coin, amount):
     """
     import math
     
-    for precision in range(10, -1, -1):  # 從10位降到0位
+    # 根據金額的小數位數來決定測試起始精度
+    import decimal
+    amount_str = f"{amount:.20f}".rstrip('0').rstrip('.')
+    if '.' in amount_str:
+        actual_precision = len(amount_str.split('.')[1])
+    else:
+        actual_precision = 0
+    
+    # 從實際精度開始測試
+    start_precision = actual_precision
+    
+    for precision in range(start_precision, -1, -1):  # 從實際精度降到0位
         # 使用無條件捨去調整金額
         precision_factor = 10 ** precision
         test_amount = math.floor(amount * precision_factor) / precision_factor
@@ -1552,7 +1582,7 @@ def find_optimal_precision_and_execute(transfer_type, op, coin, amount):
         if test_amount <= 0:
             continue
             
-        print(f"  測試 {precision} 位精度: {test_amount}")
+        print(f"  測試 {precision} 位精度: {format(test_amount, '.20f').rstrip('0').rstrip('.')}")
         
         # 執行測試轉帳
         try:
@@ -1596,13 +1626,14 @@ def find_optimal_precision_and_execute(transfer_type, op, coin, amount):
     return None  # 沒有找到可用精度
 
 
-def get_account_spot_balance(account_data):
+def get_account_spot_balance(account_data, coin=None):
     """從帳戶數據中提取現貨可用餘額"""
     wallet_result = account_data.get('wallet_result', {})
     if wallet_result.get('code') == '00000' and wallet_result.get('data'):
         wallet_data = wallet_result.get('data', [])
         if wallet_data:
-            return float(wallet_data[0].get('available', '0'))
+            available = float(wallet_data[0].get('available', '0'))
+            return available
     return 0.0
 
 
