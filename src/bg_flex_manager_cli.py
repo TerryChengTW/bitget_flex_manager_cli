@@ -927,7 +927,7 @@ def transfer_step1_query_balances(coin):
                 #print(f"  - 凍結: {frozen:.6f} {coin}")
                 #print(f"  - 總計: {total:.6f} {coin}")
             else:
-                #print(f"  - 無 {coin} 餘額")
+                pass  # 無 {coin} 餘額
         else:
             print(f"  - 查詢失敗: {wallet_result.get('msg', '未知錯誤')}")
     
