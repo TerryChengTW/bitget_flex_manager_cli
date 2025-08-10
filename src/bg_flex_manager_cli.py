@@ -14,7 +14,7 @@ from bitget_api import (
 from version_checker import check_for_updates
 
 # 配置參數
-TARGET_SUBACCOUNT_COUNT = 4
+TARGET_SUBACCOUNT_COUNT = 20
 
 
 def generate_subaccount_name():
@@ -905,7 +905,7 @@ def transfer_step1_query_balances(coin):
     # 逐個查詢每個帳戶 (與理財寶功能保持一致)
     for account_id in accounts:
         account_type = accounts[account_id].get('type')
-        print(f"\n[查詢] 帳戶 {account_id} ({account_type})...")
+        # print(f"\n[查詢] 帳戶 {account_id} ({account_type})...")
         
         # 查詢現貨錢包餘額
         wallet_result = get_spot_assets(coin, account_id)
@@ -923,11 +923,11 @@ def transfer_step1_query_balances(coin):
                 available = float(wallet_data[0].get('available', '0'))
                 frozen = float(wallet_data[0].get('frozen', '0'))
                 total = available + frozen
-                print(f"  - 可用: {available:.6f} {coin}")
-                print(f"  - 凍結: {frozen:.6f} {coin}")
-                print(f"  - 總計: {total:.6f} {coin}")
+                #print(f"  - 可用: {available:.6f} {coin}")
+                #print(f"  - 凍結: {frozen:.6f} {coin}")
+                #print(f"  - 總計: {total:.6f} {coin}")
             else:
-                print(f"  - 無 {coin} 餘額")
+                #print(f"  - 無 {coin} 餘額")
         else:
             print(f"  - 查詢失敗: {wallet_result.get('msg', '未知錯誤')}")
     
