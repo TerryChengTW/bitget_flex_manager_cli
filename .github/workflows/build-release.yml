@@ -104,7 +104,7 @@ jobs:
           echo '#!/bin/bash' > install-macos.sh
           echo 'echo "🍎 Bitget Flex Manager CLI - macOS Installer"' >> install-macos.sh
           echo 'echo "Removing quarantine attribute..."' >> install-macos.sh
-          echo 'xattr -d com.apple.quarantine bitget-flex-manager-cli-macos.app 2>/dev/null || echo "No quarantine attribute found"' >> install-macos.sh
+          echo 'xattr -rd com.apple.quarantine bitget-flex-manager-cli-macos.app 2>/dev/null || echo "No quarantine attribute found"' >> install-macos.sh
           echo 'echo "Setting proper permissions..."' >> install-macos.sh
           echo 'chmod +x bitget-flex-manager-cli-macos.app/Contents/MacOS/*' >> install-macos.sh
           echo 'echo "✅ Installation complete! You can now double-click the .app to run."' >> install-macos.sh
