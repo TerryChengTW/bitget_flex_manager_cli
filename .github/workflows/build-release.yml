@@ -79,17 +79,20 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: github.ref_type == 'tag'
+    permissions:
+      contents: write
     
     steps:
     - name: Download all artifacts
       uses: actions/download-artifact@v4
 
+    - name: List downloaded artifacts
+      run: find . -name "*.exe" -o -name "*.app" | head -10
+
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
         files: |
-          bitget-flex-manager-cli-windows.exe/bitget-flex-manager-cli.exe
-          bitget-flex-manager-cli-macos.app/bitget-flex-manager-cli.app
+          **/*.exe
+          **/*.app
         generate_release_notes: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
