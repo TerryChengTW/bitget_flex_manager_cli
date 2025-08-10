@@ -835,15 +835,15 @@ def step5_final_query(coin, selected_product, original_account_status):
         if abs(holding_change) < 1e-8:
             change_desc = "無變化"
         elif holding_change > 0:
-            change_desc = f"申購 +{holding_change}"
+            change_desc = f"申購 +{format_amount(holding_change)}"
         else:
-            change_desc = f"贖回 {holding_change}"
+            change_desc = f"贖回 {format_amount(holding_change)}"
         
         # 帳戶名稱
         account_type = after_data.get('account_info', {}).get('type', '')
         account_name = "主帳戶" if account_type == 'main' else f"子帳戶{account_id}"
         
-        print(f"{account_name:<8} {before_holding:<12} {before_wallet:<12} {after_holding:<12} {after_wallet:<12} {change_desc:<20}")
+        print(f"{account_name:<8} {format_amount(before_holding):<12} {format_amount(before_wallet):<12} {format_amount(after_holding):<12} {format_amount(after_wallet):<12} {change_desc:<20}")
         
         # 累計統計
         total_before_holding += before_holding
@@ -859,11 +859,11 @@ def step5_final_query(coin, selected_product, original_account_status):
     if abs(total_holding_change) < 1e-8:
         total_change_desc = "無變化"
     elif total_holding_change > 0:
-        total_change_desc = f"總申購 +{total_holding_change}"
+        total_change_desc = f"總申購 +{format_amount(total_holding_change)}"
     else:
-        total_change_desc = f"總贖回 {total_holding_change}"
+        total_change_desc = f"總贖回 {format_amount(total_holding_change)}"
     
-    print(f"{'總計':<8} {total_before_holding:<12} {total_before_wallet:<12} {total_after_holding:<12} {total_after_wallet:<12} {total_change_desc:<20}")
+    print(f"{'總計':<8} {format_amount(total_before_holding):<12} {format_amount(total_before_wallet):<12} {format_amount(total_after_holding):<12} {format_amount(total_after_wallet):<12} {total_change_desc:<20}")
     
     # 階梯分析
     print(f"\n=== 📈 階梯分析 ===")
