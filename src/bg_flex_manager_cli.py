@@ -1062,7 +1062,7 @@ def transfer_step2_user_selection(coin, account_balances):
         print("0. 所有子帳戶")
         for i, sub in enumerate(sub_accounts):
             print(f"{i+1}. {sub['name']} (當前餘額: {sub['balance']:.6f})")
-        print(f"多選範例: 輸入 '1,2,3' 選擇多個帳戶")
+        print(f"多選範例: 輸入 1,2,3 選擇多個帳戶")
         
         try:
             target_choice = input(f"請選擇目標 (0-{len(sub_accounts)} 或多選如 1,2,3): ").strip()
@@ -1175,7 +1175,7 @@ def transfer_step2_user_selection(coin, account_balances):
             print("0. 所有有餘額的子帳戶")
             for i, sub in enumerate(subs_with_balance):
                 print(f"{i+1}. {sub['name']} (餘額: {sub['balance']:.6f})")
-            print(f"多選範例: 輸入 '1,2,3' 選擇多個帳戶")
+            print(f"多選範例: 輸入 1,2,3 選擇多個帳戶")
             
             try:
                 source_choice = input(f"請選擇來源 (0-{len(subs_with_balance)} 或多選如 1,2,3): ").strip()
@@ -1249,7 +1249,7 @@ def transfer_step2_user_selection(coin, account_balances):
             print("0. 所有符合條件的子帳戶")
             for i, sub in enumerate(eligible_subs):
                 print(f"{i+1}. {sub['name']} (餘額: {sub['balance']:.6f})")
-            print(f"多選範例: 輸入 '1,2,3' 選擇多個帳戶")
+            print(f"多選範例: 輸入 1,2,3 選擇多個帳戶")
             
             try:
                 source_choice = input(f"請選擇來源 (0-{len(eligible_subs)} 或多選如 1,2,3): ").strip()

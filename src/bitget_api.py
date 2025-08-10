@@ -107,6 +107,24 @@ def save_config(config):
         print("[錯誤] 尚未選擇配置文件，無法保存")
         return False
     
+    # 對帳戶進行排序：主帳戶在前，子帳戶按數字順序
+    if 'accounts' in config:
+        sorted_accounts = {}
+        
+        # 先添加主帳戶
+        if 'main' in config['accounts']:
+            sorted_accounts['main'] = config['accounts']['main']
+        
+        # 再按數字順序添加子帳戶
+        sub_account_keys = [k for k in config['accounts'].keys() if k != 'main']
+        # 將數字字串轉換為整數進行排序
+        sub_account_keys.sort(key=lambda x: int(x) if x.isdigit() else float('inf'))
+        
+        for key in sub_account_keys:
+            sorted_accounts[key] = config['accounts'][key]
+        
+        config['accounts'] = sorted_accounts
+    
     with open(config_path, 'w', encoding='utf-8') as f:
         json.dump(config, f, indent=2, ensure_ascii=False)
     
