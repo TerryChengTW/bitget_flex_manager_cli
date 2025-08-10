@@ -86,15 +86,31 @@ jobs:
     - name: Download all artifacts
       uses: actions/download-artifact@v4
 
-    - name: Package macOS app
+    - name: Debug and package macOS app
       run: |
-        ls -la
-        find . -name "*.app" -type d
-        if [ -d "bitget-flex-manager-cli-macos.app/bitget-flex-manager-cli.app" ]; then
+        echo "=== Directory structure ==="
+        find . -type f -name "*.exe" -o -type d -name "*.app"
+        echo "=== All downloads ==="
+        ls -laR
+        
+        # Try different possible paths
+        if [ -d "bitget-flex-manager-cli-macos.app" ]; then
+          echo "Found artifact directory: bitget-flex-manager-cli-macos.app"
           cd bitget-flex-manager-cli-macos.app
-          zip -r ../bitget-flex-manager-cli-macos.app.zip bitget-flex-manager-cli.app
+          ls -la
+          if [ -d "bitget-flex-manager-cli.app" ]; then
+            echo "Found .app bundle, creating zip..."
+            zip -r ../bitget-flex-manager-cli-macos.app.zip bitget-flex-manager-cli.app
+          else
+            echo "No .app bundle found in artifact directory"
+          fi
           cd ..
+        else
+          echo "No artifact directory found"
         fi
+        
+        echo "=== Final files ==="
+        ls -la *.zip 2>/dev/null || echo "No zip files found"
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
