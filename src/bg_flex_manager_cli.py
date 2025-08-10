@@ -1034,14 +1034,14 @@ def transfer_step1_query_balances(coin):
                 frozen = float(wallet_data[0].get('frozen', '0'))
         
         total_balance = available + frozen
-        print(f"{account_name:<12} {account_type:<6} {format(available, '.20f').rstrip('0').rstrip('.'):<15} {format(frozen, '.20f').rstrip('0').rstrip('.'):<15} {format(total_balance, '.20f').rstrip('0').rstrip('.'):<15}")
+        print(f"{account_name:<12} {account_type:<6} {format(available, '.15f').rstrip('0').rstrip('.'):<15} {format(frozen, '.15f').rstrip('0').rstrip('.'):<15} {format(total_balance, '.15f').rstrip('0').rstrip('.'):<15}")
         
         total_available += available
         total_frozen += frozen
     
     print("-" * 70)
     total_all = total_available + total_frozen
-    print(f"{'總計':<12} {'--':<6} {format(total_available, '.20f').rstrip('0').rstrip('.'):<15} {format(total_frozen, '.20f').rstrip('0').rstrip('.'):<15} {format(total_all, '.20f').rstrip('0').rstrip('.'):<15}")
+    print(f"{'總計':<12} {'--':<6} {format(total_available, '.15f').rstrip('0').rstrip('.'):<15} {format(total_frozen, '.15f').rstrip('0').rstrip('.'):<15} {format(total_all, '.15f').rstrip('0').rstrip('.'):<15}")
     
     return account_balances
 
@@ -1091,7 +1091,7 @@ def transfer_step2_user_selection(coin, account_balances):
     operations = []
     
     if direction_choice == '1':  # 主轉子
-        print(f"\n[主帳戶轉出] 主帳戶可用餘額: {format(main_balance, '.20f').rstrip('0').rstrip('.')} {coin}")
+        print(f"\n[主帳戶轉出] 主帳戶可用餘額: {format(main_balance, '.15f').rstrip('0').rstrip('.')} {coin}")
         
         if main_balance <= 0:
             print("[錯誤] 主帳戶餘額不足")
@@ -1112,7 +1112,7 @@ def transfer_step2_user_selection(coin, account_balances):
         print(f"\n[目標選擇]")
         print("0. 所有子帳戶")
         for i, sub in enumerate(sub_accounts):
-            print(f"{i+1}. {sub['name']} (當前餘額: {format(sub['balance'], '.20f').rstrip('0').rstrip('.')})")
+            print(f"{i+1}. {sub['name']} (當前餘額: {format(sub['balance'], '.15f').rstrip('0').rstrip('.')})")
         print(f"多選範例: 輸入 1,2,3 選擇多個帳戶")
         
         try:
@@ -1225,7 +1225,7 @@ def transfer_step2_user_selection(coin, account_balances):
             print(f"\n[帳戶選擇]")
             print("0. 所有有餘額的子帳戶")
             for i, sub in enumerate(subs_with_balance):
-                print(f"{i+1}. {sub['name']} (餘額: {format(sub['balance'], '.20f').rstrip('0').rstrip('.')})")
+                print(f"{i+1}. {sub['name']} (餘額: {format(sub['balance'], '.15f').rstrip('0').rstrip('.')})")
             print(f"多選範例: 輸入 1,2,3 選擇多個帳戶")
             
             try:
@@ -1271,7 +1271,7 @@ def transfer_step2_user_selection(coin, account_balances):
                         'from_uuid': sub['uuid'],
                         'to_account': 'main',
                         'amount': sub['balance'],
-                        'description': f"{sub['name']} → 主帳戶: {format(sub['balance'], '.20f').rstrip('0').rstrip('.')} {coin} (全部餘額)"
+                        'description': f"{sub['name']} → 主帳戶: {format(sub['balance'], '.15f').rstrip('0').rstrip('.')} {coin} (全部餘額)"
                     })
                     
             except (ValueError, KeyboardInterrupt):
@@ -1299,7 +1299,7 @@ def transfer_step2_user_selection(coin, account_balances):
             print(f"\n[帳戶選擇] (餘額 >= {transfer_amount_per_account})")
             print("0. 所有符合條件的子帳戶")
             for i, sub in enumerate(eligible_subs):
-                print(f"{i+1}. {sub['name']} (餘額: {format(sub['balance'], '.20f').rstrip('0').rstrip('.')})")
+                print(f"{i+1}. {sub['name']} (餘額: {format(sub['balance'], '.15f').rstrip('0').rstrip('.')})")
             print(f"多選範例: 輸入 1,2,3 選擇多個帳戶")
             
             try:
@@ -1363,7 +1363,7 @@ def transfer_step2_user_selection(coin, account_balances):
         print(f"  {op['description']}")
         total_amount += op['amount']
     
-    print(f"\n[總計] 將轉帳 {format(total_amount, '.20f').rstrip('0').rstrip('.')} {coin}")
+    print(f"\n[總計] 將轉帳 {format(total_amount, '.15f').rstrip('0').rstrip('.')} {coin}")
     
     # 確認執行
     try:
@@ -1397,7 +1397,7 @@ def transfer_step3_execute_operations(coin, operations):
         amount = op['amount']
         description = op['description']
         
-        formatted_amount = format(amount, '.20f').rstrip('0').rstrip('.')
+        formatted_amount = format(amount, '.15f').rstrip('0').rstrip('.')
         formatted_description = description.replace(f'{amount} {coin}', f'{formatted_amount} {coin}')
         print(f"\n[執行 {i+1}/{total_count}] {formatted_description}")
         
@@ -1431,7 +1431,7 @@ def transfer_step3_execute_operations(coin, operations):
             import math
             precision_factor = 10 ** optimal_precision
             adjusted_amount = math.floor(amount * precision_factor) / precision_factor
-            print(f"[精度調整] 原始: {format(amount, '.20f').rstrip('0').rstrip('.')} → 調整: {format(adjusted_amount, '.20f').rstrip('0').rstrip('.')}")
+            print(f"[精度調整] 原始: {format(amount, '.15f').rstrip('0').rstrip('.')} → 調整: {format(adjusted_amount, '.15f').rstrip('0').rstrip('.')}")
         else:
             adjusted_amount = amount
         
@@ -1525,15 +1525,15 @@ def transfer_step4_final_query(coin, original_balances):
         if abs(balance_change) < 1e-15:  # 使用更小的閾值來識別微小變化
             change_desc = "無變化"
         elif balance_change > 0:
-            change_desc = f"轉入 +{format(balance_change, '.20f').rstrip('0').rstrip('.')}"
+            change_desc = f"轉入 +{format(balance_change, '.15f').rstrip('0').rstrip('.')}"
         else:
-            change_desc = f"轉出 {format(balance_change, '.20f').rstrip('0').rstrip('.')}"
+            change_desc = f"轉出 {format(balance_change, '.15f').rstrip('0').rstrip('.')}"
         
         # 帳戶名稱
         account_type = after_data.get('account_info', {}).get('type', '')
         account_name = "主帳戶" if account_type == 'main' else f"子帳戶{account_id}"
         
-        print(f"{account_name:<12} {format(before_balance, '.20f').rstrip('0').rstrip('.'):<15} {format(after_balance, '.20f').rstrip('0').rstrip('.'):<15} {change_desc:<20}")
+        print(f"{account_name:<12} {format(before_balance, '.15f').rstrip('0').rstrip('.'):<15} {format(after_balance, '.15f').rstrip('0').rstrip('.'):<15} {change_desc:<20}")
         
         # 累計統計
         total_before += before_balance
@@ -1545,9 +1545,9 @@ def transfer_step4_final_query(coin, original_balances):
     if abs(total_change) < 1e-15:
         total_change_desc = "無變化"
     else:
-        total_change_desc = f"淨變化 {format(total_change, '.20f').rstrip('0').rstrip('.')}"
+        total_change_desc = f"淨變化 {format(total_change, '.15f').rstrip('0').rstrip('.')}"
     
-    print(f"{'總計':<12} {format(total_before, '.20f').rstrip('0').rstrip('.'):<15} {format(total_after, '.20f').rstrip('0').rstrip('.'):<15} {total_change_desc:<20}")
+    print(f"{'總計':<12} {format(total_before, '.15f').rstrip('0').rstrip('.'):<15} {format(total_after, '.15f').rstrip('0').rstrip('.'):<15} {total_change_desc:<20}")
     
     return True
 
@@ -1564,7 +1564,7 @@ def find_optimal_precision_and_execute(transfer_type, op, coin, amount):
     
     # 根據金額的小數位數來決定測試起始精度
     import decimal
-    amount_str = f"{amount:.20f}".rstrip('0').rstrip('.')
+    amount_str = f"{amount:.15f}".rstrip('0').rstrip('.')
     if '.' in amount_str:
         actual_precision = len(amount_str.split('.')[1])
     else:
@@ -1582,7 +1582,7 @@ def find_optimal_precision_and_execute(transfer_type, op, coin, amount):
         if test_amount <= 0:
             continue
             
-        print(f"  測試 {precision} 位精度: {format(test_amount, '.20f').rstrip('0').rstrip('.')}")
+        print(f"  測試 {precision} 位精度: {format(test_amount, '.15f').rstrip('0').rstrip('.')}")
         
         # 執行測試轉帳
         try:
