@@ -13,10 +13,8 @@ jobs:
         include:
           - os: windows-latest
             artifact_name: bitget-flex-manager-cli-windows.exe
-            spec_file: windows.spec
           - os: macos-latest
             artifact_name: bitget-flex-manager-cli-macos.app
-            spec_file: macos.spec
 
     steps:
     - uses: actions/checkout@v4
@@ -35,7 +33,32 @@ jobs:
 
     - name: Build executable
       run: |
-        pyinstaller ${{ matrix.spec_file }}
+        if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+          pyinstaller --onefile --console --add-data "src/bg_key_example.json;." src/bg_flex_manager_cli.py --name bitget-flex-manager-cli
+        else
+          pyinstaller --onefile --console --add-data "src/bg_key_example.json:." src/bg_flex_manager_cli.py --name bitget-flex-manager-cli --windowed
+          # Create .app bundle for macOS
+          mkdir -p "bitget-flex-manager-cli.app/Contents/MacOS"
+          mkdir -p "bitget-flex-manager-cli.app/Contents/Resources"
+          mv dist/bitget-flex-manager-cli "bitget-flex-manager-cli.app/Contents/MacOS/"
+          cat > "bitget-flex-manager-cli.app/Contents/Info.plist" << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleName</key>
+              <string>Bitget Flex Manager CLI</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.bitget.flex-manager-cli</string>
+              <key>CFBundleVersion</key>
+              <string>1.0.0</string>
+              <key>CFBundleExecutable</key>
+              <string>bitget-flex-manager-cli</string>
+          </dict>
+          </plist>
+          EOF
+          mv bitget-flex-manager-cli.app dist/
+        fi
 
     - name: Create artifact directory
       shell: bash
