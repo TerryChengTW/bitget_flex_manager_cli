@@ -73,7 +73,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.artifact_name }}
-        path: src/dist/bitget-flex-manager-cli${{ matrix.os == 'windows-latest' && '.exe' || '.app' }}
+        path: ${{ matrix.os == 'windows-latest' && 'src/dist/bitget-flex-manager-cli.exe' || 'src/dist/bitget-flex-manager-cli.app' }}
 
   release:
     needs: build
