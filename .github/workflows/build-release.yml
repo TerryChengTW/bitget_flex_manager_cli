@@ -52,10 +52,8 @@ jobs:
           echo "3. 可以使用 bg_key_example.json 作為範本建立你的配置檔案" >> windows-release/README.txt
           echo "4. 在配置檔案中填入你的 Bitget API 資訊" >> windows-release/README.txt
           
-          # 建立.zip檔案
-          cd windows-release
-          zip -r ../bitget-flex-manager-cli-windows.zip .
-          cd ..
+          # 建立.zip檔案 (使用 PowerShell)
+          powershell -Command "Compress-Archive -Path 'windows-release/*' -DestinationPath 'bitget-flex-manager-cli-windows.zip' -Force"
           
           # 移動.zip到dist目錄
           mv bitget-flex-manager-cli-windows.zip dist/
