@@ -161,21 +161,51 @@ def ensure_target_subaccounts():
             new_subaccounts.append(sub_name)
             print(f"  [準備] 將創建: {sub_name}")
         
-        # 批量創建子帳戶
-        create_result = create_virtual_subaccount_batch(new_subaccounts)
+        # 分批創建子帳戶 (每批最多5個，避免API限制)
+        BATCH_SIZE = 5
+        total_success = 0
+        total_failure = 0
         
-        if create_result.get('code') == '00000':
-            success_list = create_result.get('data', {}).get('successList', [])
-            failure_list = create_result.get('data', {}).get('failureList', [])
+        for i in range(0, len(new_subaccounts), BATCH_SIZE):
+            batch = new_subaccounts[i:i+BATCH_SIZE]
+            batch_num = i // BATCH_SIZE + 1
+            total_batches = (len(new_subaccounts) + BATCH_SIZE - 1) // BATCH_SIZE
             
-            print(f"\n[結果] 成功創建 {len(success_list)} 個，失敗 {len(failure_list)} 個")
+            print(f"\n[批次 {batch_num}/{total_batches}] 創建 {len(batch)} 個子帳戶...")
             
-            if failure_list:
-                print("[失敗列表]:")
-                for fail in failure_list:
-                    print(f"  - {fail.get('subaAccountName')}: {fail.get('reason', '未知原因')}")
-        else:
-            print(f"[錯誤] 批量創建失敗: {create_result}")
+            # 批量創建子帳戶
+            create_result = create_virtual_subaccount_batch(batch)
+            
+            if create_result.get('code') == '00000':
+                success_list = create_result.get('data', {}).get('successList', [])
+                failure_list = create_result.get('data', {}).get('failureList', [])
+                
+                batch_success = len(success_list)
+                batch_failure = len(failure_list)
+                
+                print(f"  [批次結果] 成功 {batch_success} 個，失敗 {batch_failure} 個")
+                
+                total_success += batch_success
+                total_failure += batch_failure
+                
+                if failure_list:
+                    print("  [失敗列表]:")
+                    for fail in failure_list:
+                        print(f"    - {fail.get('subaAccountName')}: {fail.get('reason', '未知原因')}")
+            else:
+                print(f"  [批次錯誤] {create_result}")
+                # 即使某批次失敗，也繼續嘗試下一批次
+                total_failure += len(batch)
+            
+            # 批次間延遲，避免頻率限制
+            if i + BATCH_SIZE < len(new_subaccounts):
+                print("  [等待] 批次間延遲 1 秒...")
+                time.sleep(1)
+        
+        print(f"\n[總結果] 成功創建 {total_success} 個，失敗 {total_failure} 個")
+        
+        if total_success == 0:
+            print("[錯誤] 所有子帳戶創建都失敗")
             return False
         
         # 重新獲取最新的子帳戶列表
