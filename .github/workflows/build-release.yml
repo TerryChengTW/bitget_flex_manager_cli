@@ -34,60 +34,56 @@ jobs:
     - name: Build executable
       shell: bash
       run: |
+        cd src
         if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-          pyinstaller --onefile --console --add-data "src/bg_key_example.json;." src/bg_flex_manager_cli.py --name bitget-flex-manager-cli
+          # Windows: 標準.exe檔案
+          pyinstaller --onefile --console --add-data "bg_key_example.json;." bg_flex_manager_cli.py --name bitget-flex-manager-cli
         else
-          # macOS build
-          pyinstaller --onefile --console --add-data "src/bg_key_example.json:." src/bg_flex_manager_cli.py --name bitget-flex-manager-cli
+          # macOS: 先建立可執行檔
+          pyinstaller --onefile --console --add-data "bg_key_example.json:." bg_flex_manager_cli.py --name bitget-flex-manager-cli
           
-          # Create .app bundle structure
+          # 創建.app bundle結構
           mkdir -p "bitget-flex-manager-cli.app/Contents/MacOS"
           mkdir -p "bitget-flex-manager-cli.app/Contents/Resources"
           
-          # Move the executable to the app bundle
-          cp dist/bitget-flex-manager-cli "bitget-flex-manager-cli.app/Contents/MacOS/"
+          # 移動可執行檔到.app中
+          mv dist/bitget-flex-manager-cli "bitget-flex-manager-cli.app/Contents/MacOS/bitget-flex-manager-cli-bin"
           
-          # Create Info.plist
-          cat > "bitget-flex-manager-cli.app/Contents/Info.plist" << 'PLIST_EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleName</key>
-    <string>Bitget Flex Manager CLI</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.bitget.flex-manager-cli</string>
-    <key>CFBundleVersion</key>
-    <string>1.0.0</string>
-    <key>CFBundleExecutable</key>
-    <string>bitget-flex-manager-cli</string>
-    <key>LSApplicationCategoryType</key>
-    <string>public.app-category.finance</string>
-</dict>
-</plist>
-PLIST_EOF
+          # 創建啟動shell script
+          cat > "bitget-flex-manager-cli.app/Contents/MacOS/bitget-flex-manager-cli" << 'EOF'
+          #!/bin/bash
+          cd "$(dirname "$0")"
+          open -a Terminal.app ./bitget-flex-manager-cli-bin
+          EOF
+          chmod +x "bitget-flex-manager-cli.app/Contents/MacOS/bitget-flex-manager-cli"
           
-          # Move app bundle to dist directory
-          rm -rf dist/bitget-flex-manager-cli.app
+          # 創建Info.plist
+          cat > "bitget-flex-manager-cli.app/Contents/Info.plist" << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>bitget-flex-manager-cli</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.bitget.flex-manager-cli</string>
+              <key>CFBundleName</key>
+              <string>Bitget Flex Manager CLI</string>
+              <key>CFBundleVersion</key>
+              <string>1.0.0</string>
+          </dict>
+          </plist>
+          EOF
+          
+          # 移動.app到dist目錄
           mv bitget-flex-manager-cli.app dist/
-        fi
-
-    - name: Create artifact directory
-      shell: bash
-      run: |
-        if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-          mkdir -p artifacts
-          cp dist/*.exe artifacts/${{ matrix.artifact_name }}
-        else
-          mkdir -p artifacts
-          cp -r dist/*.app artifacts/${{ matrix.artifact_name }}
         fi
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.artifact_name }}
-        path: artifacts/${{ matrix.artifact_name }}
+        path: src/dist/bitget-flex-manager-cli${{ matrix.os == 'windows-latest' && '.exe' || '.app' }}
 
   release:
     needs: build
@@ -102,8 +98,8 @@ PLIST_EOF
       uses: softprops/action-gh-release@v2
       with:
         files: |
-          bitget-flex-manager-cli-windows.exe/bitget-flex-manager-cli-windows.exe
-          bitget-flex-manager-cli-macos.app/bitget-flex-manager-cli-macos.app
+          bitget-flex-manager-cli-windows.exe/bitget-flex-manager-cli.exe
+          bitget-flex-manager-cli-macos.app/bitget-flex-manager-cli.app
         generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
