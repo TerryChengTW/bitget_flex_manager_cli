@@ -1017,14 +1017,14 @@ def transfer_step1_query_balances(coin):
                 frozen = float(wallet_data[0].get('frozen', '0'))
         
         total_balance = available + frozen
-        print(f"{account_name:<12} {account_type:<6} {available:<15} {frozen:<15} {total_balance:<15}")
+        print(f"{account_name:<12} {account_type:<6} {format(available, '.20f').rstrip('0').rstrip('.'):<15} {format(frozen, '.20f').rstrip('0').rstrip('.'):<15} {format(total_balance, '.20f').rstrip('0').rstrip('.'):<15}")
         
         total_available += available
         total_frozen += frozen
     
     print("-" * 70)
     total_all = total_available + total_frozen
-    print(f"{'總計':<12} {'--':<6} {total_available:<15} {total_frozen:<15} {total_all:<15}")
+    print(f"{'總計':<12} {'--':<6} {format(total_available, '.20f').rstrip('0').rstrip('.'):<15} {format(total_frozen, '.20f').rstrip('0').rstrip('.'):<15} {format(total_all, '.20f').rstrip('0').rstrip('.'):<15}")
     
     return account_balances
 
@@ -1095,7 +1095,7 @@ def transfer_step2_user_selection(coin, account_balances):
         print(f"\n[目標選擇]")
         print("0. 所有子帳戶")
         for i, sub in enumerate(sub_accounts):
-            print(f"{i+1}. {sub['name']} (當前餘額: {sub['balance']})")
+            print(f"{i+1}. {sub['name']} (當前餘額: {format(sub['balance'], '.20f').rstrip('0').rstrip('.')})")
         print(f"多選範例: 輸入 1,2,3 選擇多個帳戶")
         
         try:
@@ -1208,7 +1208,7 @@ def transfer_step2_user_selection(coin, account_balances):
             print(f"\n[帳戶選擇]")
             print("0. 所有有餘額的子帳戶")
             for i, sub in enumerate(subs_with_balance):
-                print(f"{i+1}. {sub['name']} (餘額: {sub['balance']})")
+                print(f"{i+1}. {sub['name']} (餘額: {format(sub['balance'], '.20f').rstrip('0').rstrip('.')})")
             print(f"多選範例: 輸入 1,2,3 選擇多個帳戶")
             
             try:
@@ -1254,7 +1254,7 @@ def transfer_step2_user_selection(coin, account_balances):
                         'from_uuid': sub['uuid'],
                         'to_account': 'main',
                         'amount': sub['balance'],
-                        'description': f"{sub['name']} → 主帳戶: {sub['balance']} {coin} (全部餘額)"
+                        'description': f"{sub['name']} → 主帳戶: {format(sub['balance'], '.20f').rstrip('0').rstrip('.')} {coin} (全部餘額)"
                     })
                     
             except (ValueError, KeyboardInterrupt):
@@ -1282,7 +1282,7 @@ def transfer_step2_user_selection(coin, account_balances):
             print(f"\n[帳戶選擇] (餘額 >= {transfer_amount_per_account})")
             print("0. 所有符合條件的子帳戶")
             for i, sub in enumerate(eligible_subs):
-                print(f"{i+1}. {sub['name']} (餘額: {sub['balance']})")
+                print(f"{i+1}. {sub['name']} (餘額: {format(sub['balance'], '.20f').rstrip('0').rstrip('.')})")
             print(f"多選範例: 輸入 1,2,3 選擇多個帳戶")
             
             try:
@@ -1346,7 +1346,7 @@ def transfer_step2_user_selection(coin, account_balances):
         print(f"  {op['description']}")
         total_amount += op['amount']
     
-    print(f"\n[總計] 將轉帳 {total_amount} {coin}")
+    print(f"\n[總計] 將轉帳 {format(total_amount, '.20f').rstrip('0').rstrip('.')} {coin}")
     
     # 確認執行
     try:
