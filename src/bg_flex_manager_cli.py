@@ -133,7 +133,7 @@ def create_apikeys_for_subaccounts():
 
 def ensure_target_subaccounts():
     """確保有指定數量的虛擬子帳戶，不足則創建"""
-    print("=== Bitget Flex MVP ===")
+    print("=== Bitget Flex CLI ===")
     
     # 步驟1: 獲取現有虛擬子帳戶列表
     print("\n[步驟1] 檢查現有虛擬子帳戶...")
@@ -1500,7 +1500,7 @@ def get_main_account_uid():
 
 def show_menu():
     """顯示功能選單"""
-    print("\n=== Bitget Flex Manager MVP ===")
+    print("\n=== Bitget Flex Manager CLI ===")
     print("1. 初始化 - 完整設定所有子帳戶和API Key")
     print("2. 理財寶管理 - 主子帳戶理財寶批量操作")
     print("3. 轉帳管理 - 主子帳戶間資金轉移")
