@@ -98,17 +98,20 @@ jobs:
           codesign --force --deep --sign - bitget-flex-manager-cli-macos.app || echo "Code signing failed, continuing..."
           
           echo "Creating tar.gz archive (preserves permissions)..."
-          tar -czf bitget-flex-manager-cli-macos.app.tar.gz bitget-flex-manager-cli-macos.app
+          tar -czf bitget-flex-manager-cli-macos.tar.gz bitget-flex-manager-cli-macos.app
           ls -la *.tar.gz
         else
           echo "No .app bundle found"
         fi
 
+    - name: Checkout source for config template
+      uses: actions/checkout@v4
+      
     - name: Prepare config template
       run: |
-        # 從Windows artifact中複製出config template (因為兩個平台都有)
-        cp bitget-flex-manager-cli-windows.exe/bg_key_example.json . || echo "Config file not found in Windows artifact"
-        ls -la bg_key_example.json || echo "No config file available"
+        # 直接從source code複製config template
+        cp src/bg_key_example.json . 
+        ls -la bg_key_example.json
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
