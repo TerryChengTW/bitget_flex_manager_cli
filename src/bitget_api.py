@@ -19,16 +19,25 @@ def load_config(allow_file_selection=False):
         try:
             import tkinter as tk
             from tkinter import filedialog
+            import platform
             
-            # 創建主視窗並配置為適合 macOS 的設定
+            # 創建主視窗
             root = tk.Tk()
             root.title("選擇配置文件")
-            root.geometry("1x1+200+200")  # 設定很小的視窗大小和位置
             
-            # macOS 相容性設定
-            root.attributes('-topmost', True)  # 讓對話框置頂
-            root.lift()  # 提升到前台
-            root.update()  # 確保視窗更新
+            # 根據作業系統選擇不同的視窗處理方式
+            if platform.system() == 'Darwin':  # macOS
+                # macOS 需要可見的小視窗來確保對話框正常運作
+                root.geometry("1x1+200+200")  # 設定很小的視窗大小和位置
+                root.attributes('-topmost', True)  # 讓對話框置頂
+                root.lift()  # 提升到前台
+                root.update()  # 確保視窗更新
+            else:  # Windows 和 Linux
+                # 其他系統可以隱藏主視窗
+                root.withdraw()
+                root.attributes('-topmost', True)
+                root.lift()
+                root.focus_force()
             
             # 設置預設目錄
             initial_dir = os.path.dirname(__file__)
