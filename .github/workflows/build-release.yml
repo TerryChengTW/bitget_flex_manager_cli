@@ -88,7 +88,9 @@ jobs:
 
     - name: Package macOS app
       run: |
-        if [ -d "bitget-flex-manager-cli-macos.app" ]; then
+        ls -la
+        find . -name "*.app" -type d
+        if [ -d "bitget-flex-manager-cli-macos.app/bitget-flex-manager-cli.app" ]; then
           cd bitget-flex-manager-cli-macos.app
           zip -r ../bitget-flex-manager-cli-macos.app.zip bitget-flex-manager-cli.app
           cd ..
