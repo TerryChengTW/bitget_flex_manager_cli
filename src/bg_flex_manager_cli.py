@@ -334,12 +334,13 @@ def savings_management_workflow():
         return False
     
     # 步驟3: 用戶選擇申購策略
-    operations = step3_user_selection(coin, selected_product, account_status)
-    if operations is None:  # 用戶取消或錯誤
+    result = step3_user_selection(coin, selected_product, account_status)
+    if result is None or result[0] is None:  # 用戶取消或錯誤
         return False
+    operations, subscribe_precision = result
     
     # 步驟4: 執行申購操作
-    if not step4_execute_operations(coin, selected_product, operations):
+    if not step4_execute_operations(coin, selected_product, operations, subscribe_precision):
         return False
     
     # 步驟5: 再次查詢並顯示最終狀況
@@ -515,6 +516,30 @@ def step3_user_selection(coin, selected_product, account_status):
         print("[錯誤] 無法獲取產品階梯信息")
         return None
     
+    # 獲取最小申購金額和申購精度 (從任一帳戶的 subscribe_info 中獲取)
+    min_purchase_amount = 0.0  # 默認值
+    subscribe_precision = 10  # 默認精度
+    
+    print(f"[調試] 開始檢查 {len(account_status)} 個帳戶的 subscribe_info...")
+    for account_id, status in account_status.items():
+        subscribe_info = status.get('subscribe_info', {})
+        print(f"[調試] 帳戶 {account_id} subscribe_info code: {subscribe_info.get('code', 'None')}")
+        
+        if subscribe_info.get('code') == '00000' and subscribe_info.get('data'):
+            data = subscribe_info.get('data', {})
+            single_min_amount = data.get('singleMinAmount')
+            precision = data.get('subscribePrecision')
+            
+            print(f"[調試] 獲取到 singleMinAmount: {single_min_amount}, subscribePrecision: {precision}")
+            
+            if single_min_amount:
+                min_purchase_amount = float(single_min_amount)
+            if precision:
+                subscribe_precision = int(precision)
+            break
+    
+    print(f"[產品申購限制] 最小申購金額: {min_purchase_amount} {coin}, 精度: {subscribe_precision}")
+    
     # 顯示階梯信息
     print(f"\n[產品階梯信息]")
     tier1_limit = 0
@@ -613,7 +638,7 @@ def step3_user_selection(coin, selected_product, account_status):
     for account in selected_accounts:
         if op_choice == '1':  # 存入到填滿第一階梯上限
             can_deposit = min(account['wallet'], account['space_to_tier1'])
-            if can_deposit >= 0.1:  # 最小申購金額
+            if can_deposit >= min_purchase_amount:  # 最小申購金額
                 operations.append({
                     'account_id': account['id'],
                     'account_name': account['name'],
@@ -622,7 +647,7 @@ def step3_user_selection(coin, selected_product, account_status):
                     'reason': f"申購 {can_deposit:.6f} (錢包可用: {account['wallet']:.6f})"
                 })
             else:
-                print(f"  跳過 {account['name']}: 錢包餘額不足最小申購金額0.1 (當前: {account['wallet']:.6f})")
+                print(f"  跳過 {account['name']}: 錢包餘額不足最小申購金額{min_purchase_amount} (當前: {account['wallet']:.6f})")
         elif op_choice == '2':  # 取出到剩300
             if account['holding'] > tier1_limit:
                 redeem_amount = account['holding'] - tier1_limit
@@ -657,15 +682,15 @@ def step3_user_selection(coin, selected_product, account_status):
         confirm = input(f"\n確認執行以上操作? (y/N): ").strip().lower()
         if confirm != 'y':
             print("[取消] 用戶取消操作")
-            return None
+            return None, subscribe_precision
     except KeyboardInterrupt:
         print("[取消] 用戶取消操作")
-        return None
+        return None, subscribe_precision
     
-    return operations
+    return operations, subscribe_precision
 
 
-def step4_execute_operations(coin, selected_product, operations):
+def step4_execute_operations(coin, selected_product, operations, subscribe_precision=6):
     """步驟4: 執行申購/贖回操作"""
     print(f"\n=== 步驟4: 執行操作 ===")
     
@@ -691,8 +716,13 @@ def step4_execute_operations(coin, selected_product, operations):
         
         try:
             if action == 'subscribe':
-                print(f"申購 {amount:.6f} {coin}")
-                result = savings_subscribe(product_id, period_type, amount, account_key=account_id)
+                # 根據申購精度格式化金額 (無條件捨去)
+                import math
+                precision_factor = 10 ** subscribe_precision
+                truncated_amount = math.floor(amount * precision_factor) / precision_factor
+                formatted_amount = f"{truncated_amount:.{subscribe_precision}f}"
+                print(f"申購 {formatted_amount} {coin} (原始: {amount}, 捨去後: {truncated_amount})")
+                result = savings_subscribe(product_id, period_type, formatted_amount, account_key=account_id)
             elif action == 'redeem':
                 print(f"贖回 {amount:.6f} {coin}")
                 result = savings_redeem(product_id, period_type, amount, account_key=account_id)
