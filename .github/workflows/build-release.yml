@@ -50,30 +50,20 @@ jobs:
           mv dist/bitget-flex-manager-cli "bitget-flex-manager-cli.app/Contents/MacOS/bitget-flex-manager-cli-bin"
           
           # 創建啟動shell script
-          cat > "bitget-flex-manager-cli.app/Contents/MacOS/bitget-flex-manager-cli" << 'EOF'
-          #!/bin/bash
-          cd "$(dirname "$0")"
-          open -a Terminal.app ./bitget-flex-manager-cli-bin
-          EOF
+          echo '#!/bin/bash' > "bitget-flex-manager-cli.app/Contents/MacOS/bitget-flex-manager-cli"
+          echo 'cd "$(dirname "$0")"' >> "bitget-flex-manager-cli.app/Contents/MacOS/bitget-flex-manager-cli"
+          echo 'open -a Terminal.app ./bitget-flex-manager-cli-bin' >> "bitget-flex-manager-cli.app/Contents/MacOS/bitget-flex-manager-cli"
           chmod +x "bitget-flex-manager-cli.app/Contents/MacOS/bitget-flex-manager-cli"
           
           # 創建Info.plist
-          cat > "bitget-flex-manager-cli.app/Contents/Info.plist" << 'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>CFBundleExecutable</key>
-              <string>bitget-flex-manager-cli</string>
-              <key>CFBundleIdentifier</key>
-              <string>com.bitget.flex-manager-cli</string>
-              <key>CFBundleName</key>
-              <string>Bitget Flex Manager CLI</string>
-              <key>CFBundleVersion</key>
-              <string>1.0.0</string>
-          </dict>
-          </plist>
-          EOF
+          echo '<?xml version="1.0" encoding="UTF-8"?>' > "bitget-flex-manager-cli.app/Contents/Info.plist"
+          echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' >> "bitget-flex-manager-cli.app/Contents/Info.plist"
+          echo '<plist version="1.0"><dict>' >> "bitget-flex-manager-cli.app/Contents/Info.plist"
+          echo '<key>CFBundleExecutable</key><string>bitget-flex-manager-cli</string>' >> "bitget-flex-manager-cli.app/Contents/Info.plist"
+          echo '<key>CFBundleIdentifier</key><string>com.bitget.flex-manager-cli</string>' >> "bitget-flex-manager-cli.app/Contents/Info.plist"
+          echo '<key>CFBundleName</key><string>Bitget Flex Manager CLI</string>' >> "bitget-flex-manager-cli.app/Contents/Info.plist"
+          echo '<key>CFBundleVersion</key><string>1.0.0</string>' >> "bitget-flex-manager-cli.app/Contents/Info.plist"
+          echo '</dict></plist>' >> "bitget-flex-manager-cli.app/Contents/Info.plist"
           
           # 移動.app到dist目錄
           mv bitget-flex-manager-cli.app dist/
