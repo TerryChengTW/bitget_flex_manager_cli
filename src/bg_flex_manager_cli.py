@@ -1806,12 +1806,505 @@ def get_main_account_uid():
     return main_config.get('uuid')
 
 
+# ===== 快速操作功能 =====
+
+QUICK_OP_COINS = ['USDT', 'BTC', 'ETH', 'USDC']
+
+
+def quick_operations_menu():
+    """快速操作選單"""
+    print("\n=== 快速操作 ===")
+    print("1. 一鍵分發到所有帳戶並填滿第一階梯 (USDT/BTC/ETH/USDC)")
+    print("2. 取出到剩第一階梯，全部轉回主帳號")
+    print("3. 全部取出，全部轉回主帳號")
+    print("0. 返回主選單")
+    print("================")
+
+    try:
+        choice = input("請選擇: ").strip()
+        if choice == '1':
+            return quick_distribute_and_fill_tier1()
+        elif choice == '2':
+            return quick_redeem_and_collect(keep_tier1=True)
+        elif choice == '3':
+            return quick_redeem_and_collect(keep_tier1=False)
+        elif choice == '0':
+            return True
+        else:
+            print("[錯誤] 無效選擇")
+            return True
+    except KeyboardInterrupt:
+        print("\n[取消]")
+        return True
+
+
+def quick_distribute_and_fill_tier1():
+    """一鍵分發到所有帳戶並填滿第一階梯"""
+    print("\n=== 一鍵分發並填滿第一階梯 ===")
+    print(f"[信息] 將處理幣種: {', '.join(QUICK_OP_COINS)}")
+
+    # 確保主帳戶UID已記錄
+    if not ensure_main_account_uid():
+        print("[錯誤] 主帳戶UID配置失敗")
+        return False
+
+    # 逐個幣種處理
+    for coin in QUICK_OP_COINS:
+        print(f"\n{'='*50}")
+        print(f"[處理] {coin}")
+        print('='*50)
+
+        success = process_coin_distribute_and_fill(coin)
+        if not success:
+            print(f"[警告] {coin} 處理過程中有錯誤，繼續下一個幣種")
+
+    print(f"\n{'='*50}")
+    print("[完成] 所有幣種處理完畢")
+    return True
+
+
+def quick_redeem_and_collect(keep_tier1=False):
+    """取出理財並轉回主帳號
+
+    Args:
+        keep_tier1: True=保留第一階梯, False=全部取出
+    """
+    mode_text = "取出到剩第一階梯" if keep_tier1 else "全部取出"
+    print(f"\n=== {mode_text}，轉回主帳號 ===")
+    print(f"[信息] 將處理幣種: {', '.join(QUICK_OP_COINS)}")
+
+    # 確保主帳戶UID已記錄
+    if not ensure_main_account_uid():
+        print("[錯誤] 主帳戶UID配置失敗")
+        return False
+
+    # 逐個幣種處理
+    for coin in QUICK_OP_COINS:
+        print(f"\n{'='*50}")
+        print(f"[處理] {coin}")
+        print('='*50)
+
+        success = process_coin_redeem_and_collect(coin, keep_tier1)
+        if not success:
+            print(f"[警告] {coin} 處理過程中有錯誤，繼續下一個幣種")
+
+    print(f"\n{'='*50}")
+    print("[完成] 所有幣種處理完畢")
+    return True
+
+
+def process_coin_redeem_and_collect(coin, keep_tier1=False):
+    """處理單一幣種：贖回理財並轉回主帳號"""
+
+    mode_text = "保留第一階梯" if keep_tier1 else "全部取出"
+
+    # Step 1: 查詢該幣種的活期產品
+    print(f"\n[Step 1] 查詢 {coin} 活期理財產品...")
+    product_result = get_savings_products(coin=coin, filter_type='available', account_key='main')
+
+    if product_result.get('code') != '00000':
+        print(f"[錯誤] 查詢產品失敗: {product_result}")
+        return False
+
+    products = product_result.get('data', [])
+
+    # 找活期產品
+    flexible_product = None
+    for p in products:
+        if p.get('periodType') == 'flexible':
+            flexible_product = p
+            break
+
+    if not flexible_product:
+        print(f"[跳過] {coin} 沒有活期理財產品")
+        return True
+
+    product_id = flexible_product.get('productId')
+    apy_list = flexible_product.get('apyList', [])
+    tier1_limit = safe_float(apy_list[0].get('maxStepVal', '0')) if apy_list else 0.0
+
+    print(f"[產品] {coin} 活期 (ID: {product_id})")
+    print(f"[第一階梯上限] {format_amount(tier1_limit)} {coin}")
+
+    # Step 2: 查詢所有帳號的理財持有
+    print(f"\n[Step 2] 查詢所有帳號 {coin} 理財持有...")
+    manager = AccountManager()
+    accounts = manager.get_valid_accounts()
+
+    if not accounts:
+        print("[錯誤] 沒有有效帳戶")
+        return False
+
+    account_status = manager.query_all_savings_assets(coin, product_id, 'flexible')
+
+    # 整理帳戶資料
+    all_accounts = []
+    for account_id, status in account_status.items():
+        account_type = status['account_info'].get('type')
+
+        # 理財持有量
+        holding = 0.0
+        savings_result = status.get('savings_result', {})
+        if savings_result.get('code') == '00000':
+            result_list = savings_result.get('data', {}).get('resultList', [])
+            for item in result_list:
+                if item.get('productId') == product_id:
+                    holding = safe_float(item.get('holdAmount', '0'))
+                    break
+
+        all_accounts.append({
+            'id': account_id,
+            'type': account_type,
+            'uuid': status['account_info'].get('uuid'),
+            'holding': holding
+        })
+
+    # 顯示持有狀況
+    print(f"\n[理財持有狀況] {coin}")
+    print(f"{'帳戶':<10} {'持有量':<15} {'將贖回':<15}")
+    print("-" * 45)
+
+    total_holding = 0.0
+    redeem_tasks = []
+
+    for acc in all_accounts:
+        name = '主帳戶' if acc['type'] == 'main' else f"子帳戶{acc['id']}"
+
+        if keep_tier1:
+            redeem_amount = max(0.0, acc['holding'] - tier1_limit)
+        else:
+            redeem_amount = acc['holding']
+
+        redeem_amount = round(redeem_amount, 8)  # 精度處理
+
+        print(f"{name:<10} {format_amount(acc['holding']):<15} {format_amount(redeem_amount):<15}")
+        total_holding += acc['holding']
+
+        if redeem_amount > 0:
+            redeem_tasks.append({
+                'account_id': acc['id'],
+                'account_name': name,
+                'account_type': acc['type'],
+                'uuid': acc['uuid'],
+                'amount': redeem_amount
+            })
+
+    print("-" * 45)
+    print(f"{'總計':<10} {format_amount(total_holding):<15}")
+
+    # Step 3: 執行贖回（如果有需要）
+    if redeem_tasks:
+        print(f"\n[Step 3] 贖回理財 ({len(redeem_tasks)} 個帳號)...")
+
+        def do_redeem(task):
+            return savings_redeem(
+                product_id, 'flexible',
+                format_api_amount(task['amount']),
+                account_key=task['account_id']
+            )
+
+        # 贖回也可能有限速，一直重試直到全部成功
+        pending_tasks = redeem_tasks.copy()
+        successful_redeems = []
+        max_retries = 10
+        retry_delay = 10
+
+        for attempt in range(max_retries + 1):
+            if not pending_tasks:
+                break
+
+            if attempt > 0:
+                print(f"\n[重試 {attempt}] 等待 {retry_delay} 秒後重試 {len(pending_tasks)} 個失敗任務...")
+                time.sleep(retry_delay)
+
+            executor = ParallelExecutor()
+            tasks_for_executor = [(do_redeem, (t,)) for t in pending_tasks]
+            results = executor.execute_in_batches(tasks_for_executor, batch_size=4, delay_between_batches=1.5)
+
+            failed_tasks = []
+            for idx, result in results:
+                task = pending_tasks[idx]
+                if result.get('code') == '00000':
+                    print(f"  ✓ {task['account_name']}: {format_amount(task['amount'])} {coin}")
+                    successful_redeems.append(task)
+                else:
+                    error_msg = result.get('msg', '未知錯誤')
+                    if 'Frequent' in error_msg and attempt < max_retries:
+                        failed_tasks.append(task)
+                    else:
+                        print(f"  ✗ {task['account_name']}: {error_msg}")
+
+            pending_tasks = failed_tasks
+
+        print(f"[贖回完成] 成功 {len(successful_redeems)}/{len(redeem_tasks)}")
+
+        # 等待贖回結算
+        if successful_redeems:
+            print("\n[等待] 贖回結算中 (5秒)...")
+            time.sleep(5)
+    else:
+        print(f"\n[Step 3] 沒有需要贖回的 {coin} 理財")
+
+    # Step 5: 查所有子帳號錢包餘額並轉回主帳號
+    print(f"\n[Step 4] 查詢所有子帳號錢包餘額並轉回主帳號...")
+
+    # 查詢所有子帳號（不只是贖回成功的）
+    sub_accounts_to_transfer = []
+    main_uid = get_main_account_uid()
+
+    for acc in all_accounts:
+        if acc['type'] == 'sub':
+            # 查詢子帳號錢包餘額
+            wallet_result = get_spot_assets(coin, acc['id'])
+            wallet_balance = 0.0
+            if wallet_result.get('code') == '00000' and wallet_result.get('data'):
+                wallet_data = wallet_result.get('data', [])
+                if wallet_data:
+                    wallet_balance = safe_float(wallet_data[0].get('available', '0'))
+
+            if wallet_balance > 0:
+                acc_name = f"子帳戶{acc['id']}"
+                sub_accounts_to_transfer.append({
+                    'account_id': acc['id'],
+                    'account_name': acc_name,
+                    'uuid': acc['uuid'],
+                    'balance': wallet_balance
+                })
+
+    if not sub_accounts_to_transfer:
+        print("[完成] 沒有子帳號餘額需要轉回")
+        return True
+
+    print(f"\n[轉帳] 轉回主帳號 ({len(sub_accounts_to_transfer)} 個子帳號)...")
+
+    def do_transfer_back(task):
+        return transfer_to_main_account(
+            coin=coin,
+            amount=format_api_amount(task['balance']),
+            sub_account_uid=task['uuid'],
+            main_account_uid=main_uid,
+            account_key='main'
+        )
+
+    executor = ParallelExecutor()
+    tasks_for_executor = [(do_transfer_back, (t,)) for t in sub_accounts_to_transfer]
+    results = executor.execute_in_batches(tasks_for_executor, batch_size=8, delay_between_batches=1.0)
+
+    success_count = 0
+    for idx, result in results:
+        task = sub_accounts_to_transfer[idx]
+        if result.get('code') == '00000':
+            print(f"  ✓ {task['account_name']}: {format_amount(task['balance'])} {coin}")
+            success_count += 1
+        else:
+            print(f"  ✗ {task['account_name']}: {result.get('msg', '未知錯誤')}")
+
+    print(f"[轉帳完成] 成功 {success_count}/{len(sub_accounts_to_transfer)}")
+
+    print(f"\n[完成] {coin} 處理完畢")
+    return True
+
+
+def process_coin_distribute_and_fill(coin):
+    """處理單一幣種：主帳號分發到所有子帳號，然後全部申購到第一階梯上限"""
+
+    # Step 1: 查詢該幣種的活期產品
+    print(f"\n[Step 1] 查詢 {coin} 活期理財產品...")
+    product_result = get_savings_products(coin=coin, filter_type='available', account_key='main')
+
+    if product_result.get('code') != '00000':
+        print(f"[錯誤] 查詢產品失敗: {product_result}")
+        return False
+
+    products = product_result.get('data', [])
+
+    # 找活期產品 (periodType = 'flexible')
+    flexible_product = None
+    for p in products:
+        if p.get('periodType') == 'flexible':
+            flexible_product = p
+            break
+
+    if not flexible_product:
+        print(f"[跳過] {coin} 沒有活期理財產品")
+        return True
+
+    product_id = flexible_product.get('productId')
+    apy_list = flexible_product.get('apyList', [])
+
+    if not apy_list:
+        print(f"[錯誤] {coin} 產品沒有階梯信息")
+        return False
+
+    # 第一階梯上限
+    tier1_limit = safe_float(apy_list[0].get('maxStepVal', '0'))
+    tier1_apy = apy_list[0].get('currentApy', '0')
+
+    print(f"[產品] {coin} 活期 (ID: {product_id})")
+    print(f"[第一階梯] 上限: {format_amount(tier1_limit)} {coin}, 年化: {tier1_apy}%")
+
+    # Step 2: 查主帳號餘額
+    print(f"\n[Step 2] 查詢主帳號 {coin} 餘額...")
+    main_wallet_result = get_spot_assets(coin, 'main')
+
+    main_balance = 0.0
+    if main_wallet_result.get('code') == '00000' and main_wallet_result.get('data'):
+        wallet_data = main_wallet_result.get('data', [])
+        if wallet_data:
+            main_balance = safe_float(wallet_data[0].get('available', '0'))
+
+    print(f"[主帳號餘額] {format_amount(main_balance)} {coin}")
+
+    if main_balance <= 0:
+        print(f"[跳過] 主帳號沒有 {coin} 餘額")
+        return True
+
+    # Step 3: 取得子帳號列表
+    config = load_config()
+    sub_accounts = []
+    for account_id, info in config.get('accounts', {}).items():
+        if info.get('type') == 'sub' and info.get('apikey') and info.get('uuid'):
+            sub_accounts.append({
+                'id': account_id,
+                'uuid': info['uuid']
+            })
+
+    # 按ID排序
+    sub_accounts.sort(key=lambda x: int(x['id']) if x['id'].isdigit() else 0)
+
+    print(f"[子帳號數量] {len(sub_accounts)}")
+
+    # Step 4: 計算分配
+    # 主帳號自己留 tier1_limit，剩下的分給子帳號
+    main_keep = min(main_balance, tier1_limit)
+    available_for_subs = main_balance - main_keep
+
+    # 每個子帳號分 tier1_limit（能分幾個分幾個）
+    num_subs_can_fill = int(available_for_subs / tier1_limit) if tier1_limit > 0 else 0
+    actual_subs_to_fill = min(num_subs_can_fill, len(sub_accounts))
+
+    print(f"\n[分配計劃]")
+    print(f"  主帳號保留: {format_amount(main_keep)} {coin}")
+    print(f"  可分發金額: {format_amount(available_for_subs)} {coin}")
+    print(f"  可填滿子帳號數: {actual_subs_to_fill}/{len(sub_accounts)}")
+
+    # Step 5: 執行轉帳（主帳號 → 子帳號）
+    transfer_tasks = []
+    for i in range(actual_subs_to_fill):
+        sub = sub_accounts[i]
+        transfer_tasks.append({
+            'sub_id': sub['id'],
+            'sub_uuid': sub['uuid'],
+            'amount': tier1_limit
+        })
+
+    successful_transfers = []  # 記錄成功轉帳的子帳號
+
+    if transfer_tasks:
+        print(f"\n[Step 5] 轉帳到 {len(transfer_tasks)} 個子帳號...")
+
+        executor = ParallelExecutor()
+
+        def do_transfer(task):
+            return transfer_to_subaccount(
+                coin=coin,
+                amount=format_api_amount(task['amount']),
+                sub_account_uid=task['sub_uuid'],
+                account_key='main'
+            )
+
+        tasks_for_executor = [(do_transfer, (t,)) for t in transfer_tasks]
+        results = executor.execute_in_batches(tasks_for_executor, batch_size=8, delay_between_batches=1.0)
+
+        for idx, result in results:
+            task = transfer_tasks[idx]
+            if result.get('code') == '00000':
+                print(f"  ✓ 子帳戶{task['sub_id']}: {format_amount(task['amount'])} {coin}")
+                successful_transfers.append(task)
+            else:
+                print(f"  ✗ 子帳戶{task['sub_id']}: {result.get('msg', '未知錯誤')}")
+
+        print(f"[轉帳完成] 成功 {len(successful_transfers)}/{len(transfer_tasks)}")
+
+        if successful_transfers:
+            print("[等待] 轉帳結算 (2秒)...")
+            time.sleep(2)
+
+    # Step 6: 執行申購（主帳號 + 成功轉帳的子帳號）
+    subscribe_tasks = []
+
+    # 主帳號申購
+    if main_keep > 0:
+        subscribe_tasks.append({
+            'account_id': 'main',
+            'account_name': '主帳戶',
+            'amount': main_keep
+        })
+
+    # 子帳號申購
+    for task in successful_transfers:
+        subscribe_tasks.append({
+            'account_id': task['sub_id'],
+            'account_name': f"子帳戶{task['sub_id']}",
+            'amount': task['amount']
+        })
+
+    if subscribe_tasks:
+        print(f"\n[Step 6] 申購理財寶 ({len(subscribe_tasks)} 個帳號)...")
+
+        def do_subscribe(task):
+            return savings_subscribe(
+                product_id, 'flexible',
+                format_api_amount(task['amount']),
+                account_key=task['account_id']
+            )
+
+        # 申購限速較嚴，一直重試直到全部成功（最多 10 輪）
+        pending_tasks = subscribe_tasks.copy()
+        success_count = 0
+        max_retries = 10
+        retry_delay = 10  # 重試間隔秒數
+
+        for attempt in range(max_retries + 1):
+            if not pending_tasks:
+                break
+
+            if attempt > 0:
+                print(f"\n[重試 {attempt}] 等待 {retry_delay} 秒後重試 {len(pending_tasks)} 個失敗任務...")
+                time.sleep(retry_delay)
+
+            executor = ParallelExecutor()
+            tasks_for_executor = [(do_subscribe, (t,)) for t in pending_tasks]
+            results = executor.execute_in_batches(tasks_for_executor, batch_size=4, delay_between_batches=1.5)
+
+            failed_tasks = []
+            for idx, result in results:
+                task = pending_tasks[idx]
+                if result.get('code') == '00000':
+                    print(f"  ✓ {task['account_name']}: {format_amount(task['amount'])} {coin}")
+                    success_count += 1
+                else:
+                    error_msg = result.get('msg', '未知錯誤')
+                    if 'Frequent' in error_msg and attempt < max_retries:
+                        failed_tasks.append(task)  # 限速錯誤，加入重試
+                    else:
+                        print(f"  ✗ {task['account_name']}: {error_msg}")
+
+            pending_tasks = failed_tasks
+
+        print(f"[申購完成] 成功 {success_count}/{len(subscribe_tasks)}")
+
+    print(f"\n[完成] {coin} 處理完畢")
+    return True
+
+
 def show_menu():
     """顯示功能選單"""
     print("\n=== Bitget Flex Manager CLI ===")
     print("1. 初始化 - 完整設定所有子帳戶和API Key")
     print("2. 理財寶管理 - 主子帳戶理財寶批量操作")
     print("3. 轉帳管理 - 主子帳戶間資金轉移")
+    print("69. 快速操作 - 一鍵資金分配")
     print("0. 退出")
     print("================================")
 
@@ -1875,6 +2368,8 @@ def main():
                 print("\n[轉帳管理完成]")
             else:
                 print("\n[轉帳管理失敗] 請檢查錯誤信息")
+        elif choice == '69':
+            quick_operations_menu()
         else:
             print("[錯誤] 無效選擇，請重新輸入")
 
