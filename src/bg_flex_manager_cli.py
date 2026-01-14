@@ -81,6 +81,45 @@ class ParallelExecutor:
                 except Exception as e:
                     results[account_id] = {'error': str(e)}
         return results
+    
+    def execute_in_batches(self, tasks: list, batch_size: int = 8, 
+                           delay_between_batches: float = 1.0) -> list:
+        """分批並行執行任務 (用於共享限速的操作如轉帳)
+        
+        Args:
+            tasks: [(func, args), ...] 任務列表，每個元素為 (函數, 參數tuple)
+            batch_size: 每批最大任務數 (預設 8，保守低於 10/s 限速)
+            delay_between_batches: 批次間延遲秒數
+        
+        Returns:
+            [(index, result), ...] 結果列表，包含原始索引和結果
+        """
+        results = []
+        
+        for batch_start in range(0, len(tasks), batch_size):
+            batch_end = min(batch_start + batch_size, len(tasks))
+            batch = tasks[batch_start:batch_end]
+            
+            with ThreadPoolExecutor(max_workers=len(batch)) as executor:
+                futures = {}
+                for i, (func, args) in enumerate(batch):
+                    idx = batch_start + i
+                    futures[executor.submit(func, *args)] = idx
+                
+                for future in futures:
+                    idx = futures[future]
+                    try:
+                        results.append((idx, future.result()))
+                    except Exception as e:
+                        results.append((idx, {'code': 'ERROR', 'error': str(e)}))
+            
+            # 批次間延遲 (最後一批不需要)
+            if batch_end < len(tasks):
+                time.sleep(delay_between_batches)
+        
+        # 按索引排序返回
+        results.sort(key=lambda x: x[0])
+        return results
 
 
 class BalanceParser:
@@ -1459,109 +1498,117 @@ def transfer_step2_user_selection(coin, account_balances):
 
 
 def transfer_step3_execute_operations(coin, operations):
-    """步驟3: 執行轉帳操作"""
+    """步驟3: 執行轉帳操作 (受控並行)"""
     print(f"\n=== 步驟3: 執行轉帳操作 ===")
     
     if not operations:
         print("[信息] 沒有操作需要執行")
         return True
     
+    import math
+    
     success_count = 0
     total_count = len(operations)
-    optimal_precision = None  # 用於存儲找到的最佳精度
+    optimal_precision = None
     
     print(f"[信息] 開始執行 {total_count} 個轉帳操作...")
     
-    for i, op in enumerate(operations):
+    # ===== Step 1: 第一筆精度測試 (必須串行) =====
+    first_op = operations[0]
+    first_transfer_type = first_op['type']
+    first_amount = first_op['amount']
+    first_description = first_op['description']
+    
+    formatted_first = format_amount(first_amount)
+    formatted_desc = first_description.replace(f'{first_amount} {coin}', f'{formatted_first} {coin}')
+    print(f"\n[執行 1/{total_count}] {formatted_desc}")
+    print(f"[精度測試] 正在測試最佳轉帳精度...")
+    
+    result = find_optimal_precision_and_execute(first_transfer_type, first_op, coin, first_amount)
+    
+    if result is None:
+        print(f"[錯誤] 無法找到可用的轉帳精度，終止操作")
+        return False
+    
+    optimal_precision, first_result = result
+    print(f"[找到] 最佳精度: {optimal_precision} 位小數")
+    
+    if first_result.get('code') == '00000':
+        transfer_id = first_result.get('data', {}).get('transferId', '')
+        print(f"  [OK] 成功 (轉帳ID: {transfer_id})")
+        success_count += 1
+    else:
+        error_msg = first_result.get('msg', '未知錯誤')
+        print(f"  [ERROR] 失敗: {error_msg}")
+    
+    # 如果只有一筆操作，直接結束
+    if total_count == 1:
+        print(f"\n[完成] 轉帳操作執行完成")
+        print(f"  成功: {success_count}/{total_count}")
+        return True
+    
+    # ===== Step 2: 準備剩餘操作的並行任務 =====
+    remaining_ops = operations[1:]
+    main_account_uid = get_main_account_uid()
+    
+    def execute_single_transfer(op, precision, coin, main_uid):
+        """執行單筆轉帳的內部函數"""
         transfer_type = op['type']
         amount = op['amount']
-        description = op['description']
         
-        formatted_amount = format_amount(amount)
-        formatted_description = description.replace(f'{amount} {coin}', f'{formatted_amount} {coin}')
-        print(f"\n[執行 {i+1}/{total_count}] {formatted_description}")
+        # 精度調整
+        precision_factor = 10 ** precision
+        adjusted_amount = math.floor(amount * precision_factor) / precision_factor
+        api_amount = format_api_amount(adjusted_amount)
         
-        # 如果是第一筆轉帳且還沒找到最佳精度，進行精度嘗試兼真實執行
-        if i == 0 and optimal_precision is None:
-            print(f"[精度測試] 正在測試最佳轉帳精度...")
-            result = find_optimal_precision_and_execute(transfer_type, op, coin, amount)
-            
-            if result is None:
-                print(f"[錯誤] 無法找到可用的轉帳精度")
-                continue
-            else:
-                optimal_precision, transfer_result = result
-                print(f"[找到] 最佳精度: {optimal_precision} 位小數")
-                
-                # 處理轉帳結果 (就像正常轉帳一樣)
-                if transfer_result.get('code') == '00000':
-                    transfer_id = transfer_result.get('data', {}).get('transferId', '')
-                    print(f"  [OK] 成功 (轉帳ID: {transfer_id})")
-                    success_count += 1
-                else:
-                    error_msg = transfer_result.get('msg', '未知錯誤')
-                    print(f"  [ERROR] 失敗: {error_msg}")
-                    print(f"     詳細: {transfer_result}")
-                
-                time.sleep(0.5)  # API 限制延遲
-                continue
-        
-        # 使用找到的精度調整金額
-        if optimal_precision is not None:
-            import math
-            precision_factor = 10 ** optimal_precision
-            adjusted_amount = math.floor(amount * precision_factor) / precision_factor
-            print(f"[精度調整] 原始: {format_amount(amount)} → 調整: {format_amount(adjusted_amount)}")
-        else:
-            adjusted_amount = amount
-        
-        try:
-            if transfer_type == 'main_to_sub':
-                # 主帳戶轉子帳戶
-                # 格式化金額為API字符串格式
-                api_amount = format_api_amount(adjusted_amount)
-                result = transfer_to_subaccount(
+        if transfer_type == 'main_to_sub':
+            return transfer_to_subaccount(
+                coin=coin,
+                amount=api_amount,
+                sub_account_uid=op['to_uuid'],
+                account_key='main'
+            )
+        elif transfer_type == 'sub_to_main':
+            if main_uid:
+                return transfer_to_main_account(
                     coin=coin,
                     amount=api_amount,
-                    sub_account_uid=op['to_uuid'],
+                    sub_account_uid=op['from_uuid'],
+                    main_account_uid=main_uid,
                     account_key='main'
                 )
-            elif transfer_type == 'sub_to_main':
-                # 子帳戶轉主帳戶 - 從配置中獲取主帳戶UID
-                main_account_uid = get_main_account_uid()
-                
-                if main_account_uid:
-                    # 格式化金額為API字符串格式
-                    api_amount = format_api_amount(adjusted_amount)
-                    result = transfer_to_main_account(
-                        coin=coin,
-                        amount=api_amount,
-                        sub_account_uid=op['from_uuid'],
-                        main_account_uid=main_account_uid,
-                        account_key='main'
-                    )
-                else:
-                    result = {'code': 'ERROR', 'msg': '配置中找不到主帳戶UID，請檢查配置'}
             else:
-                print(f"[錯誤] 未知轉帳類型: {transfer_type}")
-                continue
-            
-            # 檢查執行結果
-            if result.get('code') == '00000':
-                transfer_id = result.get('data', {}).get('transferId', '')
-                print(f"  [OK] 成功 (轉帳ID: {transfer_id})")
-                success_count += 1
-            else:
-                error_msg = result.get('msg', '未知錯誤')
-                print(f"  [ERROR] 失敗: {error_msg}")
-                print(f"     詳細: {result}")
-            
-            # 輕微延遲避免過於頻繁請求
-            if i < total_count - 1:
-                time.sleep(0.3)
-                
-        except Exception as e:
-            print(f"  [ERROR] 異常: {e}")
+                return {'code': 'ERROR', 'msg': '配置中找不到主帳戶UID'}
+        else:
+            return {'code': 'ERROR', 'msg': f'未知轉帳類型: {transfer_type}'}
+    
+    # 構建任務列表
+    tasks = [
+        (execute_single_transfer, (op, optimal_precision, coin, main_account_uid))
+        for op in remaining_ops
+    ]
+    
+    # ===== Step 3: 分批並行執行 =====
+    print(f"\n[並行執行] 開始分批執行剩餘 {len(remaining_ops)} 筆轉帳 (每批 8 筆)...")
+    
+    executor = ParallelExecutor()
+    batch_results = executor.execute_in_batches(tasks, batch_size=8, delay_between_batches=1.0)
+    
+    # ===== Step 4: 顯示結果 =====
+    for idx, result in batch_results:
+        op = remaining_ops[idx]
+        op_num = idx + 2  # 第一筆已執行，從第 2 筆開始
+        
+        formatted_amount = format_amount(op['amount'])
+        desc = op['description'].replace(f"{op['amount']} {coin}", f"{formatted_amount} {coin}")
+        
+        if result.get('code') == '00000':
+            transfer_id = result.get('data', {}).get('transferId', '')
+            print(f"  [{op_num}/{total_count}] ✓ {desc} (ID: {transfer_id})")
+            success_count += 1
+        else:
+            error_msg = result.get('msg', result.get('error', '未知錯誤'))
+            print(f"  [{op_num}/{total_count}] ✗ {desc} - {error_msg}")
     
     print(f"\n[完成] 轉帳操作執行完成")
     print(f"  成功: {success_count}/{total_count}")
