@@ -45,6 +45,161 @@ def format_api_amount(value):
     return f"{floored_value:.8f}".rstrip('0').rstrip('.')
 
 
+# ===== 並行化與帳戶管理 Classes =====
+
+class ParallelExecutor:
+    """並行 API 呼叫執行器
+    
+    利用 Bitget 限速按 UID 分開計算的特性，
+    對所有帳戶同時發起 API 請求以大幅提升效率。
+    """
+    
+    def __init__(self, max_workers: int = 21):
+        self.max_workers = max_workers
+    
+    def execute_for_accounts(self, accounts: dict, func, *args) -> dict:
+        """對所有帳戶並行執行指定函數
+        
+        Args:
+            accounts: {account_id: account_info} 字典
+            func: 要執行的函數，簽名為 func(account_id, *args)
+            *args: 傳給 func 的額外參數
+        
+        Returns:
+            {account_id: result} 字典
+        """
+        results = {}
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            futures = {
+                executor.submit(func, account_id, *args): account_id
+                for account_id in accounts
+            }
+            for future in futures:
+                account_id = futures[future]
+                try:
+                    results[account_id] = future.result()
+                except Exception as e:
+                    results[account_id] = {'error': str(e)}
+        return results
+
+
+class BalanceParser:
+    """API 回傳資料解析器"""
+    
+    @staticmethod
+    def parse_spot_balance(wallet_result: dict) -> tuple:
+        """解析現貨錢包餘額 -> (available, frozen)"""
+        if wallet_result.get('code') != '00000':
+            return 0.0, 0.0
+        wallet_data = wallet_result.get('data', [])
+        if not wallet_data:
+            return 0.0, 0.0
+        available = safe_float(wallet_data[0].get('available', '0'))
+        frozen = safe_float(wallet_data[0].get('frozen', '0'))
+        return available, frozen
+    
+    @staticmethod
+    def parse_savings_holding(savings_result: dict, product_id: str) -> float:
+        """解析理財寶持有量"""
+        if savings_result.get('code') != '00000':
+            return 0.0
+        result_list = savings_result.get('data', {}).get('resultList', [])
+        for item in result_list:
+            if item.get('productId') == product_id:
+                return safe_float(item.get('holdAmount', '0'))
+        return 0.0
+    
+    @staticmethod
+    def format_account_name(account_type: str, account_id: str) -> str:
+        """格式化帳戶名稱"""
+        return '主帳戶' if account_type == 'main' else f'子帳戶{account_id}'
+
+
+class AccountManager:
+    """統一帳戶管理器
+    
+    提供帳戶載入和並行查詢功能。
+    """
+    
+    def __init__(self):
+        self.config = load_config()
+        self.executor = ParallelExecutor()
+        self.parser = BalanceParser()
+        self._accounts_cache = None
+    
+    def get_valid_accounts(self) -> dict:
+        """取得所有有效帳戶 (有 API Key)"""
+        if self._accounts_cache is not None:
+            return self._accounts_cache
+            
+        if not self.config:
+            return {}
+        accounts = {}
+        for account_id, info in self.config.get('accounts', {}).items():
+            if info.get('type') in ['main', 'sub']:
+                if info.get('apikey') and info.get('secret'):
+                    accounts[account_id] = info
+        self._accounts_cache = accounts
+        return accounts
+    
+    def query_all_spot_assets(self, coin: str) -> dict:
+        """並行查詢所有帳戶的現貨資產
+        
+        Args:
+            coin: 幣種 (如 'USDT')
+        
+        Returns:
+            {account_id: {'account_info': ..., 'wallet_result': ...}}
+        """
+        accounts = self.get_valid_accounts()
+        if not accounts:
+            return {}
+        
+        def query_single(account_id, coin):
+            return {
+                'account_info': accounts[account_id],
+                'wallet_result': get_spot_assets(coin, account_id)
+            }
+        
+        return self.executor.execute_for_accounts(accounts, query_single, coin)
+    
+    def query_all_savings_assets(self, coin: str, product_id: str, period_type: str) -> dict:
+        """並行查詢所有帳戶的理財資產
+        
+        Args:
+            coin: 幣種
+            product_id: 理財產品 ID
+            period_type: 期限類型 ('flexible' 或 'fixed')
+        
+        Returns:
+            {account_id: {'account_info': ..., 'subscribe_info': ..., 
+                         'savings_result': ..., 'wallet_result': ...}}
+        """
+        accounts = self.get_valid_accounts()
+        if not accounts:
+            return {}
+        
+        def query_single(account_id, coin, product_id, period_type):
+            # 單一帳戶內的 3 個 API 也並行
+            with ThreadPoolExecutor(max_workers=3) as inner_executor:
+                f_subscribe = inner_executor.submit(
+                    get_savings_subscribe_info, product_id, period_type, account_id)
+                f_savings = inner_executor.submit(
+                    get_savings_assets, period_type, 20, account_id)
+                f_wallet = inner_executor.submit(
+                    get_spot_assets, coin, account_id)
+                
+                return {
+                    'account_info': accounts[account_id],
+                    'subscribe_info': f_subscribe.result(),
+                    'savings_result': f_savings.result(),
+                    'wallet_result': f_wallet.result()
+                }
+        
+        return self.executor.execute_for_accounts(
+            accounts, query_single, coin, product_id, period_type)
+
+
 def generate_subaccount_name():
     """生成8位純英文字母的子帳戶名稱"""
     return ''.join(random.choices(string.ascii_lowercase, k=8))
@@ -454,7 +609,7 @@ def step1_query_savings_products(coin):
 
 
 def step2_query_current_assets(coin, selected_product):
-    """步驟2: 查詢每個帳戶的理財寶資產狀況"""
+    """步驟2: 查詢每個帳戶的理財寶資產狀況 (並行查詢)"""
     print(f"\n=== 步驟2: 查詢所有帳戶理財寶資產狀況 ===")
     
     product_id = selected_product.get('productId')
@@ -463,77 +618,24 @@ def step2_query_current_assets(coin, selected_product):
     
     print(f"[產品信息] {product_name}產品 (ID: {product_id})")
     
-    config = load_config()
-    if not config:
-        print("[錯誤] 無法載入配置文件")
-        return False
-    
-    accounts = {}
-    for account_id, account_info in config.get('accounts', {}).items():
-        if account_info.get('type') in ['main', 'sub']:
-            # 檢查是否有有效的API Key
-            if account_info.get('apikey') and account_info.get('secret'):
-                accounts[account_id] = account_info
+    # 使用 AccountManager 並行查詢
+    manager = AccountManager()
+    accounts = manager.get_valid_accounts()
     
     if not accounts:
         print("[錯誤] 沒有找到有效的帳戶配置")
         return False
     
-    print(f"[信息] 正在查詢 {len(accounts)} 個帳戶的狀況...")
+    print(f"[信息] 正在並行查詢 {len(accounts)} 個帳戶的狀況...")
     
-    account_status = {}
+    # 並行查詢所有帳戶的理財資產
+    account_status = manager.query_all_savings_assets(coin, product_id, period_type)
     
-    for account_id in accounts:
-        # print(f"\n[查詢] 帳戶 {account_id} ({accounts[account_id].get('type')})...")
-        
-        # 使用ThreadPoolExecutor並行執行3個API查詢
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            # 同時提交3個API查詢任務
-            future_subscribe = executor.submit(get_savings_subscribe_info, product_id, period_type, account_id)
-            future_savings = executor.submit(get_savings_assets, period_type, 20, account_id)
-            future_wallet = executor.submit(get_spot_assets, coin, account_id)
-            
-            # 獲取結果
-            subscribe_info = future_subscribe.result()
-            savings_result = future_savings.result()
-            wallet_result = future_wallet.result()
-        
-        account_status[account_id] = {
-            'account_info': accounts[account_id],
-            'subscribe_info': subscribe_info,
-            'savings_result': savings_result,
-            'wallet_result': wallet_result
-        }
-        
-        # 顯示基本狀態
-        subscribe_success = subscribe_info.get('code') == '00000'
-        savings_success = savings_result.get('code') == '00000'
-        wallet_success = wallet_result.get('code') == '00000'
-        
-        # 顯示詳細信息 - 查找該產品的持有量
-        personal_holding = 0
-        if savings_success:
-            savings_data = savings_result.get('data', {})
-            result_list = savings_data.get('resultList', [])
-            
-            # 查找該產品ID的持有量
-            for item in result_list:
-                if item.get('productId') == product_id:
-                    personal_holding = safe_float(item.get('holdAmount', '0'))
-                    break
-            
-            #print(f"  - 個人持有: {personal_holding:.6f} {coin}")
-        
-        if wallet_success and wallet_result.get('data'):
-            wallet_data = wallet_result.get('data', [])
-            if wallet_data:
-                available = safe_float(wallet_data[0].get('available', '0'))
-                #print(f"  - 錢包可用: {available:.6f} {coin}")
-        
+    if not account_status:
+        print("[錯誤] 查詢失敗")
+        return False
     
-    print(f"\n[信息] 資產查詢完成")
-    
-    # TODO: 格式化顯示總覽和分析
+    print(f"[信息] 資產查詢完成")
     
     return account_status
 
@@ -973,61 +1075,29 @@ def transfer_management_workflow():
 
 
 def transfer_step1_query_balances(coin):
-    """步驟1: 查詢所有帳戶的指定幣種餘額 (使用與理財寶相同的邏輯確保一致性)"""
+    """步驟1: 查詢所有帳戶的指定幣種餘額 (並行查詢)"""
     print(f"\n=== 步驟1: 查詢所有帳戶 {coin} 餘額 ===")
     
-    config = load_config()
-    if not config:
-        print("[錯誤] 無法載入配置文件")
-        return False
-    
-    accounts = {}
-    for account_id, account_info in config.get('accounts', {}).items():
-        if account_info.get('type') in ['main', 'sub']:
-            # 檢查是否有有效的API Key
-            if account_info.get('apikey') and account_info.get('secret'):
-                accounts[account_id] = account_info
+    # 使用 AccountManager 並行查詢
+    manager = AccountManager()
+    accounts = manager.get_valid_accounts()
     
     if not accounts:
         print("[錯誤] 沒有找到有效的帳戶配置")
         return False
     
-    print(f"[信息] 正在查詢 {len(accounts)} 個帳戶的 {coin} 餘額...")
+    print(f"[信息] 正在並行查詢 {len(accounts)} 個帳戶的 {coin} 餘額...")
     
-    account_balances = {}
+    # 並行查詢所有帳戶的現貨資產
+    account_balances = manager.query_all_spot_assets(coin)
     
-    # 逐個查詢每個帳戶 (與理財寶功能保持一致)
-    for account_id in accounts:
-        account_type = accounts[account_id].get('type')
-        # print(f"\n[查詢] 帳戶 {account_id} ({account_type})...")
-        
-        # 查詢現貨錢包餘額
-        wallet_result = get_spot_assets(coin, account_id)
-        
-        # 統一 8 位精度處理，不需特殊處理 ETH
-        
-        account_balances[account_id] = {
-            'account_info': accounts[account_id],
-            'wallet_result': wallet_result
-        }
-        
-        # 顯示查詢結果
-        wallet_success = wallet_result.get('code') == '00000'
-        if wallet_success and wallet_result.get('data'):
-            wallet_data = wallet_result.get('data', [])
-            if wallet_data:
-                available = safe_float(wallet_data[0].get('available', '0'))
-                frozen = safe_float(wallet_data[0].get('frozen', '0'))
-                total = available + frozen
-                #print(f"  - 可用: {available:.6f} {coin}")
-                #print(f"  - 凍結: {frozen:.6f} {coin}")
-                #print(f"  - 總計: {total:.6f} {coin}")
-            else:
-                pass  # 無 {coin} 餘額
-        else:
-            print(f"  - 查詢失敗: {wallet_result.get('msg', '未知錯誤')}")
+    if not account_balances:
+        print("[錯誤] 查詢失敗")
+        return False
     
-    # 顯示總覽表格
+    # 顯示總覽表格 (使用 BalanceParser)
+    parser = BalanceParser()
+    
     print(f"\n=== {coin} 餘額總覽 ===")
     print(f"{'帳戶':<12} {'類型':<6} {'可用餘額':<15} {'凍結餘額':<15} {'總餘額':<15}")
     print("-" * 70)
@@ -1037,16 +1107,11 @@ def transfer_step1_query_balances(coin):
     
     for account_id, balance_info in account_balances.items():
         account_type = balance_info['account_info'].get('type')
-        account_name = f"{'主帳戶' if account_type == 'main' else f'子帳戶{account_id}'}"
+        account_name = parser.format_account_name(account_type, account_id)
         
+        # 使用 BalanceParser 解析餘額
         wallet_result = balance_info.get('wallet_result', {})
-        available = 0
-        frozen = 0
-        if wallet_result.get('code') == '00000' and wallet_result.get('data'):
-            wallet_data = wallet_result.get('data', [])
-            if wallet_data:
-                available = safe_float(wallet_data[0].get('available', '0'))
-                frozen = safe_float(wallet_data[0].get('frozen', '0'))
+        available, frozen = parser.parse_spot_balance(wallet_result)
         
         total_balance = available + frozen
         print(f"{account_name:<12} {account_type:<6} {format_amount(available):<15} {format_amount(frozen):<15} {format_amount(total_balance):<15}")
