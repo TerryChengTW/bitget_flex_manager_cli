@@ -750,8 +750,10 @@ def step4_execute_operations(coin, selected_product, operations, subscribe_preci
                 print(f"申購 {formatted_amount} {coin}")
                 result = savings_subscribe(product_id, period_type, formatted_amount, account_key=account_id)
             elif action == 'redeem':
-                print(f"贖回 {amount} {coin}")
-                result = savings_redeem(product_id, period_type, amount, account_key=account_id)
+                # 8 位精度格式化
+                formatted_amount = format_api_amount(amount)
+                print(f"贖回 {formatted_amount} {coin}")
+                result = savings_redeem(product_id, period_type, formatted_amount, account_key=account_id)
             else:
                 print(f"[錯誤] 未知操作類型: {action}")
                 continue
