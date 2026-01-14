@@ -679,20 +679,26 @@ def step3_user_selection(coin, selected_product, account_status):
                 print(f"  跳過 {account['name']}: 錢包餘額不足最小申購金額{format_amount(min_purchase_amount)} (當前: {format_amount(account['wallet'])})")
         elif op_choice == '2':  # 取出到剩300
             if account['holding'] > tier1_limit:
-                redeem_amount = account['holding'] - tier1_limit
+                # 計算贖回金額並 round 到 8 位，避免浮點誤差
+                redeem_amount = round(account['holding'] - tier1_limit, 8)
+                # round 後 > 0 才處理
+                if redeem_amount > 0:
+                    operations.append({
+                        'account_id': account['id'],
+                        'account_name': account['name'],
+                        'action': 'redeem',
+                        'amount': redeem_amount
+                    })
+        elif op_choice == '3':  # 全部取出
+            # round 到 8 位，避免浮點誤差
+            redeem_amount = round(account['holding'], 8)
+            # round 後 > 0 才處理
+            if redeem_amount > 0:
                 operations.append({
                     'account_id': account['id'],
                     'account_name': account['name'],
                     'action': 'redeem',
                     'amount': redeem_amount
-                })
-        elif op_choice == '3':  # 全部取出
-            if account['holding'] > 0:
-                operations.append({
-                    'account_id': account['id'],
-                    'account_name': account['name'],
-                    'action': 'redeem',
-                    'amount': account['holding']
                 })
     
     # 顯示操作計劃
